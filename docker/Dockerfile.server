@@ -1,0 +1,72 @@
+# syntax=docker/dockerfile:1.6
+# Server Dockerfile. Build from the repo root.
+# Produces a slim runtime image with the C++ server, scripts, regions,
+# and the world DB shell. The world/players DBs are bind-mounted at
+# runtime to keep player state out of the image.
+
+ARG UBUNTU_VERSION=22.04
+FROM ubuntu:${UBUNTU_VERSION} AS builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    git \
+    liblua5.3-dev \
+    libsqlite3-dev \
+    nlohmann-json3-dev \
+    sol2 \
+    ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+
+# Build context is the repo root; copy only the server tree.
+COPY ModularMudServer/ /src/
+
+RUN mkdir -p /src/build \
+ && cmake -S /src -B /src/build -G "Unix Makefiles" \
+       -DCMAKE_BUILD_TYPE=Release \
+ && cmake --build /src/build --config Release --parallel "$(nproc)" \
+ && ls -lh /src/build/bin/
+
+# ----- runtime image -----
+FROM ubuntu:${UBUNTU_VERSION} AS runtime
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    iproute2 \
+    libgcc-s1 \
+    liblua5.3-0 \
+    libsqlite3-0 \
+    libstdc++6 \
+    sqlite3 \
+    tini \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd --system --gid 1001 mud \
+ && useradd  --system --uid 1001 --gid mud --create-home --shell /usr/sbin/nologin mud
+
+WORKDIR /mud
+
+COPY --from=builder /src/build/bin/ModularMudServer   /mud/ModularMudServer
+COPY --from=builder /src/scripts/                    /mud/scripts/
+COPY --from=builder /src/regions/                    /mud/regions/
+
+RUN chown -R mud:mud /mud
+
+USER mud
+
+ENV MUD_DB_PATH=/data/mud.world.db \
+    MUD_PLAYERS_DB=/data/mud.players.db \
+    PORT=27015
+
+EXPOSE 27015
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=5 \
+  CMD ss -tln | grep -q ":${PORT}" || exit 1
+
+ENTRYPOINT ["/usr/bin/tini", "--", "/mud/ModularMudServer"]

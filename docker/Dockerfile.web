@@ -1,0 +1,73 @@
+# syntax=docker/dockerfile:1.6
+# Web Dockerfile. Build context must be the repo root.
+# Defaults to building MudAdmin. Pass --build-arg APP=mudclient (or APP=mudadmin)
+# and --build-arg WS_URL=... to switch app.
+
+ARG NODE_VERSION=20
+FROM node:${NODE_VERSION}-alpine AS deps
+
+WORKDIR /repo
+
+COPY package.json package-lock.json ./
+COPY MudAdmin/package.json          MudAdmin/package.json
+COPY MudClient/package.json         MudClient/package.json
+COPY mud-ws-gateway/package.json    mud-ws-gateway/package.json
+
+RUN npm ci --workspaces --include-workspace-root --ignore-scripts
+
+# ---- build stage ----
+FROM node:${NODE_VERSION}-alpine AS build
+
+ARG APP=mudadmin
+ARG WS_URL=ws://localhost:8443/ws
+
+ENV NODE_ENV=production \
+    NITRO_PRESET=node-server
+
+WORKDIR /repo
+
+COPY --from=deps /repo /repo
+
+RUN if [ "$APP" = "mudclient" ]; then \
+      cp MudClient/nuxt.config.ts  MudClient/nuxt.config.ts.orig ; \
+    fi
+
+COPY MudAdmin/   MudAdmin/
+COPY MudClient/  MudClient/
+
+RUN if [ "$APP" = "mudclient" ]; then \
+      node -e "\
+        const fs=require('fs'); \
+        const p='MudClient/nuxt.config.ts'; \
+        let s=fs.readFileSync(p,'utf8'); \
+        s=s.replace(/ws:\\/\\/[^']+/,'ws:${WS_URL}'); \
+        if(!s.includes('ws:${WS_URL}')) s=s.replace(\"runtimeConfig:\", \"runtimeConfig: { public: { mudWsUrl: process.env.WS_URL || 'ws://localhost:8443/ws' } },\"); \
+        fs.writeFileSync(p, s);" ; \
+    fi
+
+RUN if [ "$APP" = "mudclient" ]; then npm --workspace mudclient run build ; \
+    else npm --workspace MudAdmin run build ; fi
+
+# ---- runtime stage ----
+FROM node:${NODE_VERSION}-alpine AS runtime
+
+WORKDIR /srv
+
+RUN addgroup -S -g 1003 web \
+ && adduser  -S -u 1003 -G web -h /srv web
+
+COPY --from=build /repo/MudAdmin/.output   /srv/app
+USER web
+
+ENV NODE_ENV=production \
+    PORT=3000 \
+    HOST=0.0.0.0 \
+    NUXT_HOST=0.0.0.0 \
+    NUXT_PORT=3000
+
+EXPOSE 3000
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=5 \
+  CMD wget -qO- http://127.0.0.1:3000/ >/dev/null 2>&1 || exit 1
+
+CMD ["node", "/srv/app/server/index.mjs"]

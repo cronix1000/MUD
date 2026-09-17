@@ -1,0 +1,78 @@
+# .dockerignore — applies to every Dockerfile in this repo.
+# Keep build contexts small.
+
+**/node_modules
+**/dist
+**/.output
+**/.nuxt
+**/.next
+**/.vite
+**/.cache
+**/.pytest_cache
+**/.ruff_cache
+**/__pycache__
+**/*.pyc
+**/*.pyd
+
+# Git / VCS
+**/.git
+**/.gitignore
+**/.gitattributes
+**/.github
+
+# IDE / editor
+**/.vs
+**/.idea
+**/.vscode
+**/*.swp
+**/*.swo
+
+# Build output
+**/build
+**/out
+**/x64
+**/vcpkg_installed
+**/vcpkg.exe
+**/vcpkg
+**/*.o
+**/*.obj
+**/*.so
+**/*.dll
+**/*.dylib
+**/*.exe
+
+# Logs
+**/*.log
+**/logs
+
+# OS cruft
+**/nul
+**/Thumbs.db
+**/Desktop.ini
+**/.DS_Store
+
+# Local env files (mounted at runtime, never baked into images)
+.env
+.env.*
+docker/.env
+docker/.env.*
+
+# Backups / snapshots — never put state into images
+**/*.bak
+**/*.presplit.*
+**/*.singlefile.*
+**/mud.db.snapshots
+**/backups
+**/scripts/backups
+
+# Tests fixtures
+**/tests/fixtures
+**/coverage
+
+# Documentation we don't need to ship inside images (workflow still uses it)
+**/docs
+**/*.md
+!MudAdmin/README.md
+!MudClient/README.md
+!ModularMudServer/README.md
+!mud-ws-gateway/README.md

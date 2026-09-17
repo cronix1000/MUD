@@ -1,0 +1,238 @@
+# docker-compose for the MUD. Two profiles:
+#
+#   docker compose --profile prod up
+#   docker compose --profile beta up
+#
+# Only one profile should be active on a given host at a time. The `prod`
+# profile uses tag :prod; the `beta` profile uses tag :beta. They share
+# the same images but bind to different ports + different DB directories.
+#
+# Set the image tag at deploy time:
+#   TAG=beta docker compose --profile beta pull
+#   TAG=beta docker compose --profile beta up -d
+#
+# Or build locally with:
+#   TAG=dev docker compose --profile prod build
+
+name: mud
+
+x-server-base: &server-base
+  build:
+    context: .
+    dockerfile: docker/Dockerfile.server
+  restart: unless-stopped
+  healthcheck:
+    test: ["CMD-SHELL", "ss -tln | grep -q :27015 || exit 1"]
+    interval: 30s
+    timeout: 5s
+    retries: 5
+
+x-gateway-base: &gateway-base
+  build:
+    context: .
+    dockerfile: docker/Dockerfile.gateway
+  restart: unless-stopped
+
+x-admin-base: &admin-base
+  build:
+    context: .
+    dockerfile: docker/Dockerfile.web
+    args:
+      APP: mudadmin
+  restart: unless-stopped
+  volumes:
+    - mud-data:/data:ro
+
+x-client-base: &client-base
+  build:
+    context: .
+    dockerfile: docker/Dockerfile.web
+    args:
+      APP: mudclient
+      WS_URL: ${WS_URL:-ws://localhost:8443/ws}
+  restart: unless-stopped
+
+volumes:
+  mud-data:
+  mud-data-beta:
+  caddy-data:
+  caddy-config:
+
+networks:
+  mud-net:
+  mud-net-beta:
+
+services:
+
+  # ============================================================
+  # prod profile
+  # ============================================================
+  mud-server:
+    <<: *server-base
+    profiles: ["prod"]
+    image: ${REGISTRY:-ghcr.io/cronix1000}/mud-server:${TAG:-prod}
+    container_name: mud-server
+    hostname: mud-server
+    environment:
+      MUD_DB_PATH: /data/mud.world.db
+      MUD_PLAYERS_DB: /data/mud.players.db
+      PORT: 27015
+      TZ: ${TZ:-UTC}
+    volumes:
+      - mud-data:/data
+    networks:
+      - mud-net
+    expose:
+      - "27015"
+
+  mud-gateway:
+    <<: *gateway-base
+    profiles: ["prod"]
+    image: ${REGISTRY:-ghcr.io/cronix1000}/mud-gateway:${TAG:-prod}
+    container_name: mud-gateway
+    hostname: mud-gateway
+    environment:
+      MUD_HOST: mud-server
+      MUD_PORT: 27015
+      WS_HOST: 0.0.0.0
+      WS_PORT: 8443
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      IDLE_TIMEOUT_S: ${IDLE_TIMEOUT_S:-1800}
+    networks:
+      - mud-net
+    ports:
+      - "${GATEWAY_PORT:-8443}:8443"
+
+  mud-admin:
+    <<: *admin-base
+    profiles: ["prod"]
+    image: ${REGISTRY:-ghcr.io/cronix1000}/mud-admin:${TAG:-prod}
+    container_name: mud-admin
+    hostname: mud-admin
+    environment:
+      MUD_DB_PATH: /data/mud.world.db
+      MUD_PLAYERS_DB: /data/mud.players.db
+      HOST: 0.0.0.0
+      PORT: 3000
+    networks:
+      - mud-net
+    expose:
+      - "3000"
+
+  mud-client:
+    <<: *client-base
+    profiles: ["prod"]
+    image: ${REGISTRY:-ghcr.io/cronix1000}/mud-client:${TAG:-prod}
+    container_name: mud-client
+    hostname: mud-client
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3001
+    networks:
+      - mud-net
+    expose:
+      - "3001"
+
+  caddy:
+    profiles: ["prod"]
+    image: caddy:2-alpine
+    container_name: mud-caddy
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - mud-net
+
+  # ============================================================
+  # beta profile  (separate volume, different external ports)
+  # ============================================================
+  mud-server-beta:
+    <<: *server-base
+    profiles: ["beta"]
+    image: ${REGISTRY:-ghcr.io/cronix1000}/mud-server:${TAG:-beta}
+    container_name: mud-server-beta
+    hostname: mud-server-beta
+    environment:
+      MUD_DB_PATH: /data/mud.world.db
+      MUD_PLAYERS_DB: /data/mud.players.db
+      PORT: 27015
+      TZ: ${TZ:-UTC}
+    volumes:
+      - mud-data-beta:/data
+    networks:
+      - mud-net-beta
+    expose:
+      - "27015"
+
+  mud-gateway-beta:
+    <<: *gateway-base
+    profiles: ["beta"]
+    image: ${REGISTRY:-ghcr.io/cronix1000}/mud-gateway:${TAG:-beta}
+    container_name: mud-gateway-beta
+    hostname: mud-gateway-beta
+    environment:
+      MUD_HOST: mud-server-beta
+      MUD_PORT: 27015
+      WS_HOST: 0.0.0.0
+      WS_PORT: 8443
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      IDLE_TIMEOUT_S: ${IDLE_TIMEOUT_S:-1800}
+    networks:
+      - mud-net-beta
+    ports:
+      - "${BETA_GATEWAY_PORT:-9443}:8443"
+
+  mud-admin-beta:
+    <<: *admin-base
+    profiles: ["beta"]
+    image: ${REGISTRY:-ghcr.io/cronix1000}/mud-admin:${TAG:-beta}
+    container_name: mud-admin-beta
+    hostname: mud-admin-beta
+    environment:
+      MUD_DB_PATH: /data/mud.world.db
+      MUD_PLAYERS_DB: /data/mud.players.db
+      HOST: 0.0.0.0
+      PORT: 3000
+    volumes:
+      - mud-data-beta:/data:ro
+    networks:
+      - mud-net-beta
+    expose:
+      - "3000"
+
+  mud-client-beta:
+    <<: *client-base
+    profiles: ["beta"]
+    image: ${REGISTRY:-ghcr.io/cronix1000}/mud-client:${TAG:-beta}
+    container_name: mud-client-beta
+    hostname: mud-client-beta
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3001
+      WS_URL: ${BETA_WS_URL:-ws://localhost:9443/ws}
+    networks:
+      - mud-net-beta
+    expose:
+      - "3001"
+
+  caddy-beta:
+    profiles: ["beta"]
+    image: caddy:2-alpine
+    container_name: mud-caddy-beta
+    restart: unless-stopped
+    ports:
+      - "${BETA_HTTP_PORT:-8080}:80"
+      - "${BETA_HTTPS_PORT:-8443}:443"
+    environment:
+      DOMAIN: ${BETA_DOMAIN:-localhost}
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+    networks:
+      - mud-net-beta

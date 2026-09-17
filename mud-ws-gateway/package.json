@@ -1,0 +1,13 @@
+{
+  "name": "mud-ws-gateway",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Marker package; the actual gateway is a uv/python project.",
+  "scripts": {
+    "dev": " uv sync && uv run mud-gateway",
+    "build": "uv sync --frozen",
+    "start": "uv run uvicorn src.app:app --host 0.0.0.0 --port 8443",
+    "test": "uv run pytest",
+    "lint": "uv run ruff check ."
+  }
+}

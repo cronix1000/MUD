@@ -1,0 +1,49 @@
+name: deploy-prod
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Image tag to deploy (default: latest)'
+        required: false
+        default: 'latest'
+  push:
+    branches: [main]
+    paths:
+      - 'ModularMudServer/**'
+      - 'MudAdmin/**'
+      - 'MudClient/**'
+      - 'mud-ws-gateway/**'
+      - 'docker/**'
+      - 'docker-compose.yml'
+      - 'scripts/**'
+      - '.github/workflows/deploy-prod.yml'
+      - 'package.json'
+      - 'package-lock.json'
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: deploy to prod
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          script_path: scripts/deploy-remote.sh
+          args: prod ${{ inputs.tag || 'latest' }}
+
+      - name: Notify
+        if: always()
+        run: |
+          echo "deploy status: ${{ job.status }}"
+          echo "view: https://${{ secrets.PROD_DOMAIN }}"

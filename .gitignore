@@ -1,0 +1,25 @@
+node_modules/
+.nuxt/
+.output/
+.cache/
+dist/
+build/
+*.log
+.env
+.env.local
+.DS_Store
+.vscode/
+.idea/
+
+# C++ server (ModularMudServer)
+x64/
+*.vcxproj.user
+vcpkg_installed/
+*.db
+*.db-journal
+
+# Python gateway
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/

@@ -1,0 +1,37 @@
+{
+  "name": "mud-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Monorepo for the Modular MUD project: server, websocket gateway, client UI, and admin UI.",
+  "workspaces": [
+    "MudClient",
+    "MudAdmin",
+    "mud-ws-gateway"
+  ],
+  "scripts": {
+    "dev:client": "npm --workspace mudclient run dev",
+    "dev:admin": "npm --workspace MudAdmin run dev",
+    "dev:clientGateway": "run-p dev:client dev:gateway",
+    "dev:gateway": "npm --workspace mud-ws-gateway run dev",
+    "build:client": "npm --workspace mudclient run build",
+  "build:clientGateWay": "npm --workspace mudclient run build && npm --workspace mud-ws-gateway run build" ,
+   "build:admin": "npm --workspace MudAdmin run build",
+    "build:gateway": "npm --workspace mud-ws-gateway run build",
+    "build:all": "npm run build:client && npm run build:admin && npm run build:gateway",
+    "typecheck:client": "npm --workspace mudclient run typecheck",
+    "typecheck:admin": "npm --workspace MudAdmin run typecheck",
+    "db:split": "node scripts/split-existing-db.mjs --server-dir ./ModularMudServer",
+    "db:migrate": "node scripts/migrate.mjs",
+    "db:migrate:list": "node scripts/migrate.mjs --list",
+    "db:prune": "bash scripts/prune-snapshots.sh 10 ./ModularMudServer",
+    "deploy:prod": "TAG=latest docker compose --profile prod up -d",
+    "deploy:beta": "TAG=latest docker compose --profile beta up -d",
+    "build:images:prod": "TAG=prod REGISTRY= docker compose --profile prod build",
+    "build:images:beta": "TAG=beta REGISTRY= docker compose --profile beta build",
+    "down:prod": "docker compose --profile prod down",
+    "down:beta": "docker compose --profile beta down"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
