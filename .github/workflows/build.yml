@@ -28,7 +28,7 @@ jobs:
           cache: 'npm'
 
       - name: Install JS deps
-        run: npm ci --workspaces --include-workspace-root --ignore-scripts
+        run: npm ci --workspaces --include-workspace-root
 
       - name: Typecheck client
         run: npm run typecheck:client
