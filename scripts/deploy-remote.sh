@@ -14,8 +14,8 @@
 #
 set -euo pipefail
 
-PROFILE="${1:-prod}"
-TAG="${2:-latest}"
+PROFILE="${DEPLOY_PROFILE:-${1:-prod}}"
+TAG="${DEPLOY_TAG:-${2:-latest}}"
 REPO_DIR="${REPO_DIR:-$HOME/mud}"
 
 case "$PROFILE" in
