@@ -34,6 +34,13 @@ jobs:
           npm install --no-save --no-package-lock --ignore-scripts \
             @rolldown/binding-linux-x64-gnu@1.2.6 \
             @oxc-parser/binding-linux-x64-gnu@0.143.0
+          echo "--- @rolldown contents ---"
+          ls -la node_modules/@rolldown/ || true
+          echo "--- rolldown binding loader expectations ---"
+          node -e "console.log(require.resolve('rolldown'))"
+          echo "--- @rolldown/binding-linux-x64-gnu package ---"
+          ls -la node_modules/@rolldown/binding-linux-x64-gnu/ 2>&1 || echo MISSING
+          echo "--- end ---"
 
       - name: Typecheck client
         run: npm run typecheck:client
