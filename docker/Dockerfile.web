@@ -3,7 +3,7 @@
 # Defaults to building MudAdmin. Pass --build-arg APP=mudclient (or APP=mudadmin)
 # and --build-arg WS_URL=... to switch app.
 
-ARG NODE_VERSION=20
+ARG NODE_VERSION=22
 FROM node:${NODE_VERSION}-alpine AS deps
 
 WORKDIR /repo

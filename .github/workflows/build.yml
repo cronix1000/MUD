@@ -24,30 +24,11 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20.18.0'
+          node-version: '22.11.0'
           cache: 'npm'
 
       - name: Install JS deps
-        run: |
-          rm -rf node_modules
-          npm ci --workspaces --include-workspace-root || echo "WARN: npm ci exited non-zero (npm cli #4828)"
-
-      - name: Install Linux native bindings
-        run: |
-          set +e
-          echo "--- BEFORE ---"
-          ls node_modules/@rolldown/ 2>&1 || echo MISSING_ROOT
-          ls node_modules/@oxc-parser/ 2>&1 || echo MISSING_ROOT
-          npm install --no-save --no-package-lock --ignore-scripts --force \
-            @rolldown/binding-linux-x64-gnu@1.2.6 \
-            @oxc-parser/binding-linux-x64-gnu@0.143.0
-          echo "--- AFTER npm install ---"
-          ls node_modules/@rolldown/ 2>&1 || echo MISSING_AFTER
-          ls node_modules/@oxc-parser/ 2>&1 || echo MISSING_AFTER
-          echo "--- rolldown resolve path ---"
-          node -e "try{console.log(require.resolve('rolldown'))}catch(e){console.log('NO_RESOLVE:',e.message)}"
-          find node_modules -maxdepth 4 -name "rolldown-binding.linux-x64-gnu.node" 2>&1 || echo NO_BINARY
-          echo "--- end ---"
+        run: npm ci --workspaces --include-workspace-root
 
       - name: Typecheck client
         run: npm run typecheck:client
