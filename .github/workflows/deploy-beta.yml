@@ -20,17 +20,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up SSH
+      - name: Deploy over SSH
+        if: ${{ secrets.BETA_HOST != '' && secrets.BETA_USER != '' && secrets.BETA_SSH_KEY != '' }}
         uses: appleboy/ssh-action@v1
+        env:
+          DEPLOY_PROFILE: beta
+          DEPLOY_TAG: ${{ github.event.inputs.tag || 'latest' }}
         with:
           host: ${{ secrets.BETA_HOST }}
           username: ${{ secrets.BETA_USER }}
           key: ${{ secrets.BETA_SSH_KEY }}
           script_path: scripts/deploy-remote.sh
-          args: beta ${{ inputs.tag || 'latest' }}
+          envs: DEPLOY_PROFILE,DEPLOY_TAG
+
+      - name: Skip deploy (missing secrets)
+        if: ${{ !(secrets.BETA_HOST != '' && secrets.BETA_USER != '' && secrets.BETA_SSH_KEY != '') }}
+        run: echo "::warning::Skipping beta deploy because BETA_HOST, BETA_USER, or BETA_SSH_KEY is not configured."
 
       - name: Notify
         if: always()
         run: |
           echo "deploy status: ${{ job.status }}"
-          echo "view: https://${{ secrets.BETA_DOMAIN }}"
+          if [ -n "${{ secrets.BETA_DOMAIN }}" ]; then
+            echo "view: https://${{ secrets.BETA_DOMAIN }}"
+          fi

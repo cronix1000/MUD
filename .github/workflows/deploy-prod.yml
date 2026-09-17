@@ -33,17 +33,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up SSH
+      - name: Deploy over SSH
+        if: ${{ secrets.PROD_HOST != '' && secrets.PROD_USER != '' && secrets.PROD_SSH_KEY != '' }}
         uses: appleboy/ssh-action@v1
+        env:
+          DEPLOY_PROFILE: prod
+          DEPLOY_TAG: ${{ github.event.inputs.tag || 'latest' }}
         with:
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.PROD_USER }}
           key: ${{ secrets.PROD_SSH_KEY }}
           script_path: scripts/deploy-remote.sh
-          args: prod ${{ inputs.tag || 'latest' }}
+          envs: DEPLOY_PROFILE,DEPLOY_TAG
+
+      - name: Skip deploy (missing secrets)
+        if: ${{ !(secrets.PROD_HOST != '' && secrets.PROD_USER != '' && secrets.PROD_SSH_KEY != '') }}
+        run: echo "::warning::Skipping prod deploy because PROD_HOST, PROD_USER, or PROD_SSH_KEY is not configured."
 
       - name: Notify
         if: always()
         run: |
           echo "deploy status: ${{ job.status }}"
-          echo "view: https://${{ secrets.PROD_DOMAIN }}"
+          if [ -n "${{ secrets.PROD_DOMAIN }}" ]; then
+            echo "view: https://${{ secrets.PROD_DOMAIN }}"
+          fi
