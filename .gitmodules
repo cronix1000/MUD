@@ -1,0 +1,3 @@
+[submodule "ModularMudServer"]
+	path = ModularMudServer
+	url = https://github.com/cronix1000/ModularMudServer.git
