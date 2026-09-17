@@ -30,8 +30,8 @@ jobs:
       - name: Install JS deps
         run: npm ci --workspaces --include-workspace-root
 
-      - name: Rebuild platform-native bindings
-        run: npm rebuild oxc-parser rolldown --workspaces --include-workspace-root
+      - name: Install Linux native bindings
+        run: npm install --no-save --no-package-lock --ignore-scripts @rolldown/binding-linux-x64-gnu @oxc-parser/binding-linux-x64-gnu
 
       - name: Typecheck client
         run: npm run typecheck:client
