@@ -1,5 +1,4 @@
 name: deploy-beta
-
 on:
   workflow_dispatch:
     inputs:
@@ -7,28 +6,17 @@ on:
         description: 'Image tag to deploy (default: latest)'
         required: false
         default: 'latest'
-
 concurrency:
   group: deploy-beta
   cancel-in-progress: false
-
 jobs:
   deploy:
     name: deploy to beta
-    runs-on: ubuntu-latest
-    environment: beta
+    runs-on: [self-hosted, homelab-beta]
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up SSH
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.BETA_HOST }}
-          username: ${{ secrets.BETA_USER }}
-          key: ${{ secrets.BETA_SSH_KEY }}
-          script_path: scripts/deploy-remote.sh
-          args: beta ${{ inputs.tag || 'latest' }}
-
+      - name: Deploy
+        run: bash scripts/deploy-remote.sh beta ${{ inputs.tag || 'latest' }}
       - name: Notify
         if: always()
         run: |
