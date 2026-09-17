@@ -13,16 +13,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     ca-certificates \
     cmake \
-    curl \
     git \
     liblua5.3-dev \
     libsqlite3-dev \
     nlohmann-json3-dev \
- && rm -rf /var/lib/apt/lists/* \
- && mkdir -p /usr/include/sol \
- && curl -fsSL -o /usr/include/sol/sol.hpp     https://github.com/ThePhD/sol2/releases/download/v3.3.0/sol.hpp \
- && curl -fsSL -o /usr/include/sol/forward.hpp https://github.com/ThePhD/sol2/releases/download/v3.3.0/forward.hpp \
- && curl -fsSL -o /usr/include/sol/config.hpp  https://github.com/ThePhD/sol2/releases/download/v3.3.0/config.hpp
+ && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
 
