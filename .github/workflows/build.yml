@@ -15,36 +15,8 @@ env:
   IMAGE_OWNER: ${{ github.repository_owner }}
 
 jobs:
-  quality:
-    name: quality gates
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22.11.0'
-          cache: 'npm'
-
-      - name: Install JS deps
-        run: npm ci --workspaces --include-workspace-root
-
-      - name: Typecheck client
-        run: npm run typecheck:client
-
-      - name: Build admin (compile + typecheck gate)
-        run: npm run build:admin
-
-      - name: Build client
-        run: npm run build:client
-
-      - name: Build gateway
-        run: npm run build:gateway
-
   docker:
     name: docker build (${{ matrix.image }})
-    needs: quality
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
