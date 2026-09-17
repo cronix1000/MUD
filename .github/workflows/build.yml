@@ -30,16 +30,23 @@ jobs:
       - name: Install JS deps
         run: |
           rm -rf node_modules
-          npm ci --workspaces --include-workspace-root
-          npm install --no-save --no-package-lock --ignore-scripts \
+          npm ci --workspaces --include-workspace-root || echo "WARN: npm ci exited non-zero (npm cli #4828)"
+
+      - name: Install Linux native bindings
+        run: |
+          set +e
+          echo "--- BEFORE ---"
+          ls node_modules/@rolldown/ 2>&1 || echo MISSING_ROOT
+          ls node_modules/@oxc-parser/ 2>&1 || echo MISSING_ROOT
+          npm install --no-save --no-package-lock --ignore-scripts --force \
             @rolldown/binding-linux-x64-gnu@1.2.6 \
             @oxc-parser/binding-linux-x64-gnu@0.143.0
-          echo "--- @rolldown contents ---"
-          ls -la node_modules/@rolldown/ || true
-          echo "--- rolldown binding loader expectations ---"
-          node -e "console.log(require.resolve('rolldown'))"
-          echo "--- @rolldown/binding-linux-x64-gnu package ---"
-          ls -la node_modules/@rolldown/binding-linux-x64-gnu/ 2>&1 || echo MISSING
+          echo "--- AFTER npm install ---"
+          ls node_modules/@rolldown/ 2>&1 || echo MISSING_AFTER
+          ls node_modules/@oxc-parser/ 2>&1 || echo MISSING_AFTER
+          echo "--- rolldown resolve path ---"
+          node -e "try{console.log(require.resolve('rolldown'))}catch(e){console.log('NO_RESOLVE:',e.message)}"
+          find node_modules -maxdepth 4 -name "rolldown-binding.linux-x64-gnu.node" 2>&1 || echo NO_BINARY
           echo "--- end ---"
 
       - name: Typecheck client
