@@ -100,3 +100,13 @@ log "stack status"
 TAG="$PROFILE" REGISTRY="$REGISTRY" docker compose "--profile=$PROFILE" ps
 
 log "done. logs: docker compose --profile $PROFILE logs -f mud-server-beta"
+
+cat <<'EOF'
+
+>>> Subsequent deploys:
+>>>   cd ~/mud && git pull && TAG=beta REGISTRY=ghcr.io/cronix1000 \
+>>>     docker compose --profile beta pull && \
+>>>     TAG=beta REGISTRY=ghcr.io/cronix1000 \
+>>>     docker compose --profile beta up -d --force-recreate --remove-orphans
+>>> or just rerun this script — it always fast-forwards to origin/main.
+EOF
