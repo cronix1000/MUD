@@ -28,15 +28,15 @@ jobs:
             platforms: linux/amd64
           - image: gateway
             dockerfile: docker/Dockerfile.gateway
-            platforms: linux/amd64,linux/arm64
+            platforms: linux/amd64
           - image: admin
             dockerfile: docker/Dockerfile.web
             build-args: APP=mudadmin
-            platforms: linux/amd64,linux/arm64
+            platforms: linux/amd64
           - image: client
             dockerfile: docker/Dockerfile.web
             build-args: APP=mudclient,WS_URL=wss://CHANGE_ME/ws
-            platforms: linux/amd64,linux/arm64
+            platforms: linux/amd64
     steps:
       - uses: actions/checkout@v4
         with:
