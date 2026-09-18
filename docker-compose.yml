@@ -38,7 +38,7 @@ x-admin-base: &admin-base
     context: .
     dockerfile: docker/Dockerfile.web
     args:
-      APP: mudadmin
+      APP: MudAdmin
   restart: unless-stopped
   volumes:
     - mud-data:/data:ro
@@ -196,7 +196,7 @@ services:
       context: .
       dockerfile: docker/Dockerfile.web
       args:
-        APP: mudadmin
+        APP: MudAdmin
     image: ${REGISTRY:-ghcr.io/cronix1000}/mud-admin:${TAG:-beta}
     container_name: mud-admin-beta
     hostname: mud-admin-beta
