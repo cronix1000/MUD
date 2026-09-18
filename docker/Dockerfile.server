@@ -48,6 +48,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
+    gosu \
     iproute2 \
     libgcc-s1 \
     liblua5.3-0 \
@@ -67,12 +68,12 @@ COPY --from=builder /src/scripts/                    /mud/scripts/
 COPY --from=builder /src/regions/                    /mud/regions/
 COPY --from=builder /src/mud.db                      /mud/mud.world.db
 
-RUN chown -R mud:mud /mud
-
-USER mud
+COPY docker/entrypoint-server.sh /usr/local/bin/entrypoint-server.sh
+RUN chmod +x /usr/local/bin/entrypoint-server.sh \
+ && chown -R mud:mud /mud
 
 ENV MUD_DB_PATH=/mud/mud.world.db \
-    MUD_PLAYERS_DB=/data/mud.players.db \
+    MUD_PLAYERS_DB=/mud/mud.players.db \
     PORT=27015
 
 EXPOSE 27015
@@ -80,4 +81,4 @@ EXPOSE 27015
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=5 \
   CMD ss -tln | grep -q ":${PORT}" || exit 1
 
-ENTRYPOINT ["/usr/bin/tini", "--", "/mud/ModularMudServer"]
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/entrypoint-server.sh"]
