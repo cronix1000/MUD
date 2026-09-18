@@ -1,66 +1,59 @@
-# syntax=docker/dockerfile:1.6
-# Web Dockerfile. Build context must be the repo root.
-# Defaults to building MudAdmin. Pass --build-arg APP=mudclient (or APP=mudadmin)
-# and --build-arg WS_URL=... to switch app.
+# syntax=docker/dockerfile:1.4
+ARG APP=mudclient
 
-ARG NODE_VERSION=22.21.0
-FROM node:${NODE_VERSION}-alpine AS deps
-
+# --- Stage 1: Dependencies ---
+FROM node:20-alpine AS deps
 WORKDIR /repo
 
-COPY package.json package-lock.json* ./
-COPY MudAdmin/package.json          MudAdmin/package.json
-COPY MudClient/package.json         MudClient/package.json
-COPY mud-ws-gateway/package.json    mud-ws-gateway/package.json
+RUN apk add --no-cache libc6-compat python3 make g++
 
-RUN if [ -f package-lock.json ]; then \
-      npm ci --workspaces --include-workspace-root --ignore-scripts; \
-    else \
-      npm install --workspaces --include-workspace-root --no-audit --no-fund --ignore-scripts; \
-    fi
+COPY package.json package-lock.json ./
+COPY MudAdmin/package.json MudAdmin/package.json
+COPY MudClient/package.json MudClient/package.json
+COPY mud-ws-gateway/package.json mud-ws-gateway/package.json
 
-# ---- build stage ----
-FROM node:${NODE_VERSION}-alpine AS build
+RUN npm ci
 
-ARG APP=mudadmin
-ARG WS_URL=ws://localhost:8443/ws
-
-ENV NODE_ENV=production \
-    NITRO_PRESET=node-server
-
+# --- Stage 2: Build ---
+FROM node:20-alpine AS build
+ARG APP=mudclient
+ARG WS_URL="10.0.0.223:18080/ws"
 WORKDIR /repo
 
 COPY --from=deps /repo /repo
 
-RUN if [ "$APP" = "mudclient" ]; then \
-      cp MudClient/nuxt.config.ts  MudClient/nuxt.config.ts.orig ; \
-    fi
+# 1. Copy source files FIRST
+COPY MudAdmin/ MudAdmin/
+COPY MudClient/ MudClient/
 
-COPY MudAdmin/   MudAdmin/
-COPY MudClient/  MudClient/
-
+# 2. Backup and patch nuxt.config.ts for MudClient
 RUN if [ "$APP" = "mudclient" ]; then \
+      cp MudClient/nuxt.config.ts MudClient/nuxt.config.ts.orig ; \
       node -e "\
-        const fs=require('fs'); \
-        const p='MudClient/nuxt.config.ts'; \
-        let s=fs.readFileSync(p,'utf8'); \
-        s=s.replace(/ws:\\/\\/[^']+/,'ws:${WS_URL}'); \
-        if(!s.includes('ws:${WS_URL}')) s=s.replace(\"runtimeConfig:\", \"runtimeConfig: { public: { mudWsUrl: process.env.WS_URL || 'ws://localhost:8443/ws' } },\"); \
+        const fs = require('fs'); \
+        const p = 'MudClient/nuxt.config.ts'; \
+        let s = fs.readFileSync(p, 'utf8'); \
+        s = s.replace(/mudWsUrl:\s*['\"][^'\"]*['\"]/, \"mudWsUrl: 'ws://${WS_URL}'\"); \
         fs.writeFileSync(p, s);" ; \
     fi
 
-RUN if [ "$APP" = "mudclient" ]; then npm --workspace mudclient run build ; \
-    else npm --workspace MudAdmin run build ; fi
+# 3. Build target application
+RUN if [ "$APP" = "mudclient" ]; then \
+      npm --workspace mudclient run build ; \
+    else \
+      npm --workspace mudadmin run build ; \
+    fi
 
-# ---- runtime stage ----
-FROM node:${NODE_VERSION}-alpine AS runtime
+# --- Stage 3: Runtime ---
+FROM node:20-alpine AS runtime
+WORKDIR /srv/app
 
-WORKDIR /srv
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 web
 
-RUN addgroup -S -g 1003 web \
- && adduser  -S -u 1003 -G web -h /srv web
+# Copy whatever application .output folder was generated
+COPY --from=build --chown=web:nodejs /repo/*/.output /srv/app
 
-COPY --from=build /repo/MudAdmin/.output   /srv/app
 USER web
 
 ENV NODE_ENV=production \

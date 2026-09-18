@@ -1,28 +1,26 @@
-# Caddy reverse proxy for the MUD.
-#
-# Routes:
-#   /                  -> mud-client (Nuxt SSR on :3001)
-#   /admin/**          -> mud-admin (Nuxt SSR on :3000)
-#   /ws                -> mud-gateway (WebSocket on :8443 internal)
-#
-# This file is used by the caddy service in docker-compose.yml. It is loaded
-# by Caddy as a file adapter. Replace {$DOMAIN} with your real hostname (or
-# use ":443" / ":80" to bind on all interfaces).
-
-{$DOMAIN:localhost} {
+:80 {
     encode zstd gzip
 
-    reverse_proxy mud-admin:3000 {
-        header_up Host {host}
-        header_up X-Real-IP {remote_host}
+    # WebSocket Gateway
+    handle /ws* {
+        reverse_proxy mud-gateway-beta:8443 {
+            header_up Host {host}
+        }
     }
 
-    reverse_proxy /ws/* mud-gateway:8443 {
-        header_up Host {host}
+    # Admin Panel
+    handle_path /admin* {
+        reverse_proxy mud-admin-beta:3000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+        }
     }
 
-    reverse_proxy mud-client:3001 {
-        header_up Host {host}
-        header_up X-Real-IP {remote_host}
+    # Default: Mud Game Client
+    handle {
+        reverse_proxy mud-client-beta:3001 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+        }
     }
 }
