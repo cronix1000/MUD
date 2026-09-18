@@ -60,7 +60,9 @@ volumes:
 
 networks:
   mud-net:
+    name: mud-net
   mud-net-beta:
+    name: mud-net-beta
 
 services:
 
@@ -160,7 +162,7 @@ services:
     container_name: mud-server-beta
     hostname: mud-server-beta
     environment:
-      MUD_DB_PATH: /mud/mud.world.db
+      MUD_DB_PATH: /data/mud.world.db
       MUD_PLAYERS_DB: /data/mud.players.db
       PORT: 27015
       TZ: ${TZ:-UTC}
@@ -186,53 +188,66 @@ services:
       IDLE_TIMEOUT_S: ${IDLE_TIMEOUT_S:-1800}
     networks:
       - mud-net-beta
-    ports:
-      - "${BETA_GATEWAY_PORT:-9443}:8443"
+    expose:
+      - "8443"
 
   mud-admin-beta:
-    <<: *admin-base
-    profiles: ["beta"]
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.web
+      args:
+        APP: mudadmin
     image: ${REGISTRY:-ghcr.io/cronix1000}/mud-admin:${TAG:-beta}
     container_name: mud-admin-beta
     hostname: mud-admin-beta
+    profiles: ["beta"]
+    restart: unless-stopped
     environment:
       MUD_DB_PATH: /data/mud.world.db
       MUD_PLAYERS_DB: /data/mud.players.db
       HOST: 0.0.0.0
       PORT: 3000
     volumes:
-      - mud-data-beta:/data:ro
+      - mud-data-beta:/data
     networks:
       - mud-net-beta
     expose:
       - "3000"
 
   mud-client-beta:
-    <<: *client-base
-    profiles: ["beta"]
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.web
+      args:
+        APP: mudclient
+        WS_URL: ${BETA_WS_URL:-<lan-host>:18080/ws}
     image: ${REGISTRY:-ghcr.io/cronix1000}/mud-client:${TAG:-beta}
     container_name: mud-client-beta
     hostname: mud-client-beta
+    profiles: ["beta"]
+    restart: unless-stopped
     environment:
       HOST: 0.0.0.0
       PORT: 3001
-      WS_URL: ${BETA_WS_URL:-ws://localhost:9443/ws}
+    volumes:
+      - mud-data-beta:/data
     networks:
       - mud-net-beta
     expose:
       - "3001"
 
   caddy-beta:
-    profiles: ["beta"]
     image: caddy:2-alpine
     container_name: mud-caddy-beta
+    profiles: ["beta"]
     restart: unless-stopped
     ports:
-      - "${BETA_HTTP_PORT:-8080}:80"
-      - "${BETA_HTTPS_PORT:-8443}:443"
-    environment:
-      DOMAIN: ${BETA_DOMAIN:-localhost}
+      - "${BETA_HTTP_PORT:-18080}:80"
     volumes:
       - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
     networks:
       - mud-net-beta
+    depends_on:
+      - mud-client-beta
+      - mud-admin-beta
+      - mud-gateway-beta

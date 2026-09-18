@@ -23,3 +23,10 @@ vcpkg_installed/
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# SQLite databases and journals
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+data/
