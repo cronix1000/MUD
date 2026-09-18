@@ -166,6 +166,7 @@ services:
       TZ: ${TZ:-UTC}
     volumes:
       - mud-data-beta:/data
+      - ./ModularMudServer/mud.db:/data/mud.world.db:rw
     networks:
       - mud-net-beta
     expose:
