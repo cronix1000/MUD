@@ -71,7 +71,7 @@ RUN chown -R mud:mud /mud
 
 USER mud
 
-ENV MUD_DB_PATH=/data/mud.world.db \
+ENV MUD_DB_PATH=/mud/mud.world.db \
     MUD_PLAYERS_DB=/data/mud.players.db \
     PORT=27015
 
