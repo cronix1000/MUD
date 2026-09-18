@@ -65,6 +65,7 @@ WORKDIR /mud
 COPY --from=builder /src/build/bin/ModularMudServer   /mud/ModularMudServer
 COPY --from=builder /src/scripts/                    /mud/scripts/
 COPY --from=builder /src/regions/                    /mud/regions/
+COPY --from=builder /src/mud.db                      /mud/mud.world.db
 
 RUN chown -R mud:mud /mud
 

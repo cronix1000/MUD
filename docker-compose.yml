@@ -160,12 +160,11 @@ services:
     container_name: mud-server-beta
     hostname: mud-server-beta
     environment:
-      MUD_DB_PATH: /mud.world.db
+      MUD_DB_PATH: /mud/mud.world.db
       MUD_PLAYERS_DB: /data/mud.players.db
       PORT: 27015
       TZ: ${TZ:-UTC}
     volumes:
-      - ./ModularMudServer/mud.db:/mud.world.db:ro
       - mud-data-beta:/data
     networks:
       - mud-net-beta
