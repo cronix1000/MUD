@@ -27,7 +27,13 @@ COPY ModularMudServer/ /src/
 RUN mkdir -p /src/build \
  && cmake -S /src -B /src/build -G "Unix Makefiles" \
        -DCMAKE_BUILD_TYPE=Release \
- && cmake --build /src/build --config Release --parallel "$(nproc)" \
+       -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+ && cmake --build /src/build --config Release --parallel "$(nproc)" 2> /tmp/build.err \
+ || (echo "=== parallel build failed; running single-threaded with -k to surface the first error ===" \
+     && cmake --build /src/build --config Release -- -j1 -k 2>&1 | tail -300 \
+     && echo "=== captured stderr tail ===" \
+     && tail -300 /tmp/build.err \
+     && exit 1) \
  && ls -lh /src/build/bin/
 
 # ----- runtime image -----
