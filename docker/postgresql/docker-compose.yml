@@ -1,0 +1,54 @@
+# docker/postgres/docker-compose.yml
+#
+# Standalone Postgres service shared by the prod and beta MUD stacks.
+# Both profiles (`prod` and `beta`) point at this single instance, but each
+# gets its own database (`mud_prod` / `mud_beta`) and its own role/password
+# pair so the two environments cannot read or write each other's data.
+#
+# Brought up automatically by the root docker-compose.yml via `include:`.
+# Not started by itself; profiles here are intentionally empty so an
+# accidental `docker compose up` of just this file does nothing.
+
+name: mud-postgres
+
+x-pg-base: &pg-base
+  build:
+    context: .
+    dockerfile: Dockerfile.postgres
+  image: mud-postgres:dev
+  restart: unless-stopped
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+    interval: 10s
+    timeout: 5s
+    retries: 10
+
+volumes:
+  pgdata:
+    name: mud-pgdata
+
+services:
+  postgres:
+    <<: *pg-base
+    container_name: mud-postgres
+    hostname: postgres
+    env_file:
+      - ${PG_ENV_FILE:-./pg.env}
+    environment:
+      TZ: ${TZ:-UTC}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - mud-net
+      - mud-net-beta
+    expose:
+      - "5432"
+
+networks:
+  mud-net:
+    name: mud-net
+    external: true
+  mud-net-beta:
+    name: mud-net-beta
+    external: true
