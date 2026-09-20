@@ -1,4 +1,4 @@
-import { getDb } from '../../utils/db'
+import { getPool } from '../../utils/db'
 
 interface StarterTile {
   symbol: string
@@ -29,26 +29,41 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'world_id is required' })
   }
 
-  const db = getDb()
-  const count = (db.prepare(`select count(*) as c from world_terrains where world_id = ?`).get(world_id) as { c: number }).c
+  const pool = getPool()
+  const countRes = await pool.query<{ c: string }>(
+    `select count(*) as c from world.world_terrains where world_id = $1`,
+    [world_id],
+  )
+  const count = Number(countRes.rows[0]?.c ?? 0)
   if (count >= 3) {
     return { seeded: 0, skipped: true, message: `World '${world_id}' already has ${count} tiles; seed skipped.` }
   }
 
-  const insert = db.prepare(
-    `insert into world_terrains (world_id, symbol, name, color, blocks_move, blocks_sight, move_cost) values (?, ?, ?, ?, ?, ?, ?)`,
+  const existingRes = await pool.query<{ symbol: string }>(
+    `select symbol from world.world_terrains where world_id = $1`,
+    [world_id],
   )
-  let seeded = 0
-  const existing = new Set(
-    (db.prepare(`select symbol from world_terrains where world_id = ?`).all(world_id) as Array<{ symbol: string }>).map((r) => r.symbol),
-  )
-  const tx = db.transaction((rows: StarterTile[]) => {
-    for (const r of rows) {
+  const existing = new Set(existingRes.rows.map((r) => r.symbol))
+
+  const client = await pool.connect()
+  try {
+    await client.query('begin')
+    let seeded = 0
+    for (const r of STARTER_TILES) {
       if (existing.has(r.symbol)) continue
-      insert.run(world_id, r.symbol, r.name, r.color, r.blocks_move, r.blocks_sight, r.move_cost)
+      await client.query(
+        `insert into world.world_terrains (world_id, symbol, name, color, blocks_move, blocks_sight, move_cost)
+         values ($1, $2, $3, $4, $5, $6, $7)`,
+        [world_id, r.symbol, r.name, r.color, r.blocks_move, r.blocks_sight, r.move_cost],
+      )
       seeded++
     }
-  })
-  tx(STARTER_TILES)
-  return { seeded, skipped: false, message: `Seeded ${seeded} starter tile(s) into '${world_id}'.` }
+    await client.query('commit')
+    return { seeded, skipped: false, message: `Seeded ${seeded} starter tile(s) into '${world_id}'.` }
+  } catch (e) {
+    await client.query('rollback')
+    throw e
+  } finally {
+    client.release()
+  }
 })

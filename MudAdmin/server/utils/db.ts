@@ -1,9 +1,7 @@
-import Database from 'better-sqlite3'
-import { existsSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import pg from 'pg'
 import { COMPOSITE_KEYS } from './composite-key'
 
-let _db: Database.Database | null = null
+let _pool: pg.Pool | null = null
 
 const ALLOWED_TABLES = new Set([
   'player_players',
@@ -30,122 +28,21 @@ const ALLOWED_TABLES = new Set([
   'world_recipes',
 ])
 
-function derivePlayersPath(worldDbPath: string): string {
-  const bakIdx = worldDbPath.indexOf('.bak.')
-  const base = bakIdx >= 0 ? worldDbPath.slice(0, bakIdx) : worldDbPath
-  const worldTok = '.world.db'
-  const wpos = base.lastIndexOf(worldTok)
-  if (wpos >= 0) {
-    return base.slice(0, wpos) + '.players.db' + base.slice(wpos + worldTok.length)
-  }
-  if (base.endsWith('.db')) {
-    return base.slice(0, -3) + '.players.db'
-  }
-  return base + '.players.db'
-}
-
-function ensurePlayersFile(playersDbPath: string): void {
-  if (existsSync(playersDbPath)) return
-  const tmp = new Database(playersDbPath)
-  tmp.pragma('foreign_keys = ON')
-  tmp.exec(`
-    CREATE TABLE IF NOT EXISTS player_players (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      region_id TEXT DEFAULT 'floor1',
-      account_id INTEGER UNIQUE,
-      permission INTEGER NOT NULL,
-      name TEXT UNIQUE NOT NULL,
-      password_hash TEXT NOT NULL,
-      salt TEXT NOT NULL,
-      room_id INTEGER DEFAULT 1,
-      data TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS player_items (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      owner_id INTEGER NOT NULL,
-      template_id TEXT NOT NULL,
-      item_state TEXT NOT NULL,
-      FOREIGN KEY (owner_id) REFERENCES player_players(id) ON DELETE CASCADE
-    );
-    CREATE TABLE IF NOT EXISTS player_known_recipes (
-      uid INTEGER NOT NULL,
-      world_id TEXT NOT NULL,
-      recipe_id TEXT NOT NULL,
-      learned_at INTEGER NOT NULL,
-      PRIMARY KEY (uid, world_id, recipe_id)
-    );
-  `)
-  tmp.close()
-}
-
-export function getDb(): Database.Database {
-  if (_db) return _db
-  const configured = process.env.MUD_DB_PATH
-  const candidates = [
-    configured,
-    resolve(process.cwd(), '..', 'ModularMudServer', 'mud.world.db'),
-    resolve(process.cwd(), '..', 'ModularMudServer', 'mud.db'),
-    resolve(process.cwd(), 'ModularMudServer', 'mud.world.db'),
-    resolve(process.cwd(), 'ModularMudServer', 'mud.db'),
-  ].filter(Boolean) as string[]
-  const found = candidates.find((p) => existsSync(p))
-  if (!found) {
+function defaultConnectionString(): string {
+  const url = process.env.MUD_DATABASE_URL
+  if (!url) {
     throw new Error(
-      `mud.db not found. Tried:\n${candidates.join('\n')}\nSet MUD_DB_PATH to override.`,
+      'MUD_DATABASE_URL is required (e.g. postgresql://mud_prod:...@postgres:5432/mud_prod?options=-c%20search_path=world,players,_meta,public). ' +
+      'See docker/.env.example for the full template.',
     )
   }
+  return url
+}
 
-  _db = new Database(found, { readonly: false, fileMustExist: true })
-  _db.pragma('foreign_keys = ON')
-
-  const playersPath = process.env.MUD_PLAYERS_DB ?? derivePlayersPath(found)
-  const worldIsSplit = playersPath !== found && playersPath !== found.replace(/\.world\.db\b/, '.db') === false
-
-  if (!existsSync(playersPath)) {
-    try {
-      ensurePlayersFile(playersPath)
-      console.log(`[db] created players DB at ${playersPath}`)
-    } catch (e) {
-      console.warn(`[db] could not create players DB at ${playersPath}:`, e)
-      return _db
-    }
-  }
-
-  try {
-    _db.exec(`ATTACH DATABASE '${playersPath.replace(/'/g, "''")}' AS players`)
-    _db.exec(`
-      CREATE TABLE IF NOT EXISTS players.player_players (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        region_id TEXT DEFAULT 'floor1',
-        account_id INTEGER UNIQUE,
-        permission INTEGER NOT NULL,
-        name TEXT UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL,
-        salt TEXT NOT NULL,
-        room_id INTEGER DEFAULT 1,
-        data TEXT NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS players.player_items (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        owner_id INTEGER NOT NULL,
-        template_id TEXT NOT NULL,
-        item_state TEXT NOT NULL,
-        FOREIGN KEY (owner_id) REFERENCES player_players(id) ON DELETE CASCADE
-      );
-      CREATE TABLE IF NOT EXISTS players.player_known_recipes (
-        uid INTEGER NOT NULL,
-        world_id TEXT NOT NULL,
-        recipe_id TEXT NOT NULL,
-        learned_at INTEGER NOT NULL,
-        PRIMARY KEY (uid, world_id, recipe_id)
-      );
-    `)
-    console.log(`[db] attached players DB from ${playersPath}`)
-  } catch (e) {
-    console.warn(`[db] could not attach players DB:`, e)
-  }
-
-  return _db
+export function getPool(): pg.Pool {
+  if (_pool) return _pool
+  _pool = new pg.Pool({ connectionString: defaultConnectionString() })
+  return _pool
 }
 
 export function assertTable(table: string): void {
@@ -156,7 +53,8 @@ export function assertTable(table: string): void {
 
 function qualified(table: string): string {
   if (table.startsWith('player_')) return `players.${table}`
-  return table
+  if (table.startsWith('_')) return `_meta.${table}`
+  return `world.${table}`
 }
 
 export interface ColumnInfo {
@@ -168,15 +66,50 @@ export interface ColumnInfo {
   pk: 0 | 1
 }
 
-export function getColumns(table: string): ColumnInfo[] {
-  assertTable(table)
-  return getDb().prepare(`pragma table_info(${qualified(table)})`).all() as ColumnInfo[]
+function schemaFor(table: string): 'world' | 'players' | '_meta' {
+  if (table.startsWith('player_')) return 'players'
+  if (table.startsWith('_')) return '_meta'
+  return 'world'
 }
 
-export function getPrimaryKey(table: string): string | null {
-  const cols = getColumns(table)
-  const pk = cols.find((c) => c.pk === 1)
-  return pk?.name ?? null
+export async function getColumns(table: string): Promise<ColumnInfo[]> {
+  assertTable(table)
+  const schema = schemaFor(table)
+  const res = await getPool().query<{
+    ordinal_position: number
+    column_name: string
+    data_type: string
+    is_nullable: 'YES' | 'NO'
+    column_default: string | null
+  }>(
+    `SELECT ordinal_position, column_name, data_type, is_nullable, column_default
+       FROM information_schema.columns
+      WHERE table_schema = $1 AND table_name = $2
+      ORDER BY ordinal_position`,
+    [schema, table],
+  )
+  return res.rows.map((r) => ({
+    cid: Number(r.ordinal_position) - 1,
+    name: r.column_name,
+    type: r.data_type,
+    notnull: r.is_nullable === 'NO' ? 1 : 0,
+    dflt_value: r.column_default,
+    pk: 0,
+  }))
+}
+
+async function getPrimaryKeyColumn(table: string): Promise<string | null> {
+  const schema = schemaFor(table)
+  const res = await getPool().query<{ column_name: string }>(
+    `SELECT a.attname AS column_name
+       FROM pg_index i
+       JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+       JOIN pg_class c ON c.oid = i.indrelid
+       JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = $1 AND c.relname = $2 AND i.indisprimary`,
+    [schema, table],
+  )
+  return res.rows[0]?.column_name ?? null
 }
 
 function isComposite(table: string): boolean {
@@ -189,85 +122,146 @@ function buildWhere(table: string, id: unknown): { sql: string; params: unknown[
     if (!id || typeof id !== 'object') {
       throw createError({ statusCode: 400, statusMessage: `${table} requires composite key object` })
     }
-    const parts = spec.fields.map((f) => `${f} = ?`)
-    return { sql: parts.join(' and '), params: spec.fields.map((f) => (id as Record<string, unknown>)[f]) }
+    const parts = spec.fields.map((f) => `${f} = $1`)
+    return {
+      sql: parts.join(' and '),
+      params: [spec.fields.map((f) => (id as Record<string, unknown>)[f])],
+    }
   }
-  const pk = getPrimaryKey(table)
+  throw createError({
+    statusCode: 400,
+    statusMessage: `Table ${table} is missing composite key spec (PK discovery is async; use composite-key helpers)`,
+  })
+}
+
+function buildWhereFromId(table: string, id: unknown, pkColumn: string): { sql: string; params: unknown[] } {
+  return { sql: `${pkColumn} = $1`, params: [id] }
+}
+
+export async function listRows(table: string, limit = 100, offset = 0) {
+  assertTable(table)
+  const res = await getPool().query(
+    `select * from ${qualified(table)} limit $1 offset $2`,
+    [limit, offset],
+  )
+  return res.rows
+}
+
+export async function getRow(table: string, id: unknown) {
+  assertTable(table)
+  if (isComposite(table)) {
+    const w = buildWhere(table, id)
+    const res = await getPool().query(
+      `select * from ${qualified(table)} where ${w.sql}`,
+      w.params,
+    )
+    return res.rows[0] ?? null
+  }
+  const pk = await getPrimaryKeyColumn(table)
   if (!pk) throw createError({ statusCode: 400, statusMessage: `Table ${table} has no PK` })
-  return { sql: `${pk} = ?`, params: [id] }
+  const w = buildWhereFromId(table, id, pk)
+  const res = await getPool().query(
+    `select * from ${qualified(table)} where ${w.sql}`,
+    w.params,
+  )
+  return res.rows[0] ?? null
 }
 
-export function listRows(table: string, limit = 100, offset = 0) {
+export async function insertRow(table: string, body: Record<string, unknown>) {
   assertTable(table)
-  return getDb()
-    .prepare(`select * from ${qualified(table)} limit ? offset ?`)
-    .all(limit, offset)
-}
-
-export function getRow(table: string, id: unknown) {
-  assertTable(table)
-  const w = buildWhere(table, id)
-  return getDb()
-    .prepare(`select * from ${qualified(table)} where ${w.sql}`)
-    .get(...w.params)
-}
-
-export function insertRow(table: string, body: Record<string, unknown>) {
-  assertTable(table)
-  const cols = getColumns(table)
+  const cols = await getColumns(table)
   const colNames = cols.map((c) => c.name)
-  const payload = coercePayload(table, body)
+  const payload = await coercePayload(table, body)
+
   const spec = COMPOSITE_KEYS[table]
-  const singlePk = getPrimaryKey(table)
+  const singlePk = spec ? null : await getPrimaryKeyColumn(table)
   const pkFields = spec ? spec.fields : singlePk ? [singlePk] : []
-  if (pkFields.length === 0) throw createError({ statusCode: 400, statusMessage: `Table ${table} has no PK` })
+  if (pkFields.length === 0) {
+    throw createError({ statusCode: 400, statusMessage: `Table ${table} has no PK` })
+  }
 
   const requiredPkFields = pkFields.filter((f) => {
     if (spec) return true
     const col = cols.find((c) => c.name === f)
     if (!col) return true
-    return !(col.type.toUpperCase().includes('INTEGER') && col.pk === 1)
+    return !(col.type.toLowerCase().includes('integer') && /serial|bigserial|identity/.test(col.dflt_value?.toString() ?? ''))
   })
-  if (requiredPkFields.some((f) => payload[f] === undefined)) {
-    throw createError({ statusCode: 400, statusMessage: `Missing PK field(s) for ${table}: ${requiredPkFields.join(', ')}` })
+  for (const f of requiredPkFields) {
+    if (payload[f] === undefined) {
+      throw createError({ statusCode: 400, statusMessage: `Missing PK field(s) for ${table}: ${f}` })
+    }
   }
 
   const validKeys = Object.keys(payload).filter((k) => colNames.includes(k))
   if (validKeys.length === 0) throw createError({ statusCode: 400, statusMessage: 'No valid columns' })
-  const placeholders = validKeys.map(() => '?').join(', ')
-  const stmt = getDb().prepare(
-    `insert into ${qualified(table)} (${validKeys.join(', ')}) values (${placeholders})`,
-  )
-  const info = stmt.run(...validKeys.map((k) => payload[k]))
-  return { id: info.lastInsertRowid, changes: info.changes }
+
+  const placeholders = validKeys.map((_, i) => `$${i + 1}`).join(', ')
+  const hasJsonb = validKeys.some((k) => isJsonColumn(k))
+  const returningClause = singlePk && !validKeys.includes(singlePk) ? ` RETURNING ${singlePk}` : ''
+  const sql = `insert into ${qualified(table)} (${validKeys.join(', ')}) values (${placeholders})${returningClause}`
+  const values = validKeys.map((k) => payload[k])
+  const res = await getPool().query(sql, values)
+  return { id: res.rows[0]?.[singlePk ?? ''] ?? null, changes: res.rowCount ?? 0, _hasJsonb: hasJsonb }
 }
 
-export function updateRow(table: string, id: unknown, body: Record<string, unknown>) {
+export async function updateRow(table: string, id: unknown, body: Record<string, unknown>) {
   assertTable(table)
-  const cols = getColumns(table).map((c) => c.name)
-  const payload = coercePayload(table, body)
+  const cols = await getColumns(table)
+  const colNames = cols.map((c) => c.name)
+  const payload = await coercePayload(table, body)
   const spec = COMPOSITE_KEYS[table]
-  const pkFromSingle = getPrimaryKey(table)
-  const pkFields = spec ? spec.fields : pkFromSingle ? [pkFromSingle] : []
-  if (pkFields.length === 0) throw createError({ statusCode: 400, statusMessage: `Table ${table} has no PK` })
-  const validKeys = Object.keys(payload).filter((k) => cols.includes(k) && !pkFields.includes(k))
+  const singlePk = spec ? null : await getPrimaryKeyColumn(table)
+  const pkFields = spec ? spec.fields : singlePk ? [singlePk] : []
+  if (pkFields.length === 0) {
+    throw createError({ statusCode: 400, statusMessage: `Table ${table} has no PK` })
+  }
+  const validKeys = Object.keys(payload).filter((k) => colNames.includes(k) && !pkFields.includes(k))
   if (validKeys.length === 0) throw createError({ statusCode: 400, statusMessage: 'No updatable columns' })
-  const set = validKeys.map((k) => `${k} = ?`).join(', ')
-  const w = buildWhere(table, id)
-  const stmt = getDb().prepare(`update ${qualified(table)} set ${set} where ${w.sql}`)
-  const info = stmt.run(...validKeys.map((k) => payload[k]), ...w.params)
-  return { changes: info.changes }
+
+  const setSql = validKeys.map((k, i) => `${k} = $${i + 1}`).join(', ')
+  const w = isComposite(table)
+    ? buildWhere(table, id)
+    : buildWhereFromId(table, id, singlePk!)
+  const baseIdx = validKeys.length
+  const whereSql = isComposite(table)
+    ? w.sql.replace(/\$(\d+)/g, (_, n) => `$${Number(n) + baseIdx}`)
+    : `${singlePk} = $${baseIdx + 1}`
+  const params = isComposite(table)
+    ? [...validKeys.map((k) => payload[k]), ...w.params[0] as unknown[]]
+    : [...validKeys.map((k) => payload[k]), (w.params as unknown[])[0]]
+  const res = await getPool().query(
+    `update ${qualified(table)} set ${setSql} where ${whereSql}`,
+    params,
+  )
+  return { changes: res.rowCount ?? 0 }
 }
 
-export function deleteRow(table: string, id: unknown) {
+export async function deleteRow(table: string, id: unknown) {
   assertTable(table)
-  const w = buildWhere(table, id)
-  const info = getDb().prepare(`delete from ${qualified(table)} where ${w.sql}`).run(...w.params)
-  return { changes: info.changes }
+  if (isComposite(table)) {
+    const w = buildWhere(table, id)
+    const res = await getPool().query(
+      `delete from ${qualified(table)} where ${w.sql}`,
+      w.params,
+    )
+    return { changes: res.rowCount ?? 0 }
+  }
+  const pk = await getPrimaryKeyColumn(table)
+  if (!pk) throw createError({ statusCode: 400, statusMessage: `Table ${table} has no PK` })
+  const w = buildWhereFromId(table, id, pk)
+  const res = await getPool().query(
+    `delete from ${qualified(table)} where ${w.sql}`,
+    w.params,
+  )
+  return { changes: res.rowCount ?? 0 }
 }
 
-function coercePayload(table: string, body: Record<string, unknown>): Record<string, unknown> {
-  const cols = getColumns(table)
+function isJsonColumn(name: string): boolean {
+  return name.endsWith('_json')
+}
+
+async function coercePayload(table: string, body: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const cols = await getColumns(table)
   const colByName = new Map(cols.map((c) => [c.name, c]))
   const out: Record<string, unknown> = {}
   for (const [key, raw] of Object.entries(body)) {
@@ -277,23 +271,32 @@ function coercePayload(table: string, body: Record<string, unknown>): Record<str
     if (raw === null) { out[key] = null; continue }
     if (isJsonColumn(col.name)) {
       if (typeof raw === 'string') {
-        try { JSON.parse(raw); out[key] = raw } catch { throw createError({ statusCode: 400, statusMessage: `Column ${col.name} must be valid JSON` }) }
+        try {
+          JSON.parse(raw)
+          out[key] = raw
+        } catch {
+          throw createError({ statusCode: 400, statusMessage: `Column ${col.name} must be valid JSON` })
+        }
       } else {
         out[key] = JSON.stringify(raw)
       }
       continue
     }
     const upper = col.type.toUpperCase()
-    if (upper === 'INTEGER') {
+    if (upper === 'INTEGER' || upper === 'BIGINT' || upper === 'SMALLINT') {
       const n = Number(raw)
       if (!Number.isFinite(n)) throw createError({ statusCode: 400, statusMessage: `Column ${col.name} must be numeric` })
       out[key] = Math.trunc(n)
       continue
     }
-    if (upper === 'REAL') {
+    if (upper === 'REAL' || upper === 'DOUBLE PRECISION' || upper === 'NUMERIC') {
       const n = Number(raw)
       if (!Number.isFinite(n)) throw createError({ statusCode: 400, statusMessage: `Column ${col.name} must be numeric` })
       out[key] = n
+      continue
+    }
+    if (upper === 'BOOLEAN') {
+      out[key] = raw === true || raw === 'true' || raw === 't' || raw === 1 || raw === '1'
       continue
     }
     out[key] = String(raw)
@@ -301,6 +304,9 @@ function coercePayload(table: string, body: Record<string, unknown>): Record<str
   return out
 }
 
-function isJsonColumn(name: string): boolean {
-  return name.endsWith('_json')
+export async function closePool(): Promise<void> {
+  if (_pool) {
+    await _pool.end()
+    _pool = null
+  }
 }

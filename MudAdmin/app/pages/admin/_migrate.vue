@@ -43,7 +43,7 @@ function fmtTs(ms: number) {
     <div>
       <h2 class="text-2xl font-semibold font-mono">Migrations</h2>
       <p class="text-neutral-400 text-sm mt-1">
-        Manual database migrations. A backup of <code>mud.db</code> is created automatically before any pending migration runs.
+        Manual database migrations. A <code>pg_dump</code> backup of <code>MUD_DATABASE_URL</code> is created automatically before any pending migration runs.
         Click <strong>Run pending</strong> to apply.
       </p>
     </div>
