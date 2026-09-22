@@ -26,6 +26,7 @@ The C++ server (`ModularMudServer`) is intentionally **excluded from npm workspa
 | Build all JS      | `npm run build:all`              |
 | Typecheck client  | `npm run typecheck:client`       |
 | Build C++ server  | see `ModularMudServer/AGENTS.md` |
+| Bring up Postgres | `docker compose -f docker/postgresql/docker-compose.yml up -d postgres` |
 
 `MudAdmin` has no `typecheck` script — its `npm run build` is the canonical compile + typecheck gate. Run `npm run build:admin` from the repo root.
 
@@ -33,17 +34,30 @@ The C++ server (`ModularMudServer`) is intentionally **excluded from npm workspa
 
 `MudClient` declares `name: "mudclient"` (lowercase) and `MudAdmin` declares `name: "MudAdmin"` (PascalCase). The root scripts target these names — **don't rename packages without updating `package.json` scripts at the root**.
 
+## Database — Postgres everywhere
+
+World content (regions, rooms, items, mobs, …) and player accounts live in a single Postgres 16 instance configured by `MUD_DATABASE_URL` (libpq-style URL, with `options=-c search_path=world,players,_meta,public` set so unqualified table names resolve into the right schema).
+
+The C++ server (`ModularMudServer/PostgresDatabase.cpp`) and the admin UI (`MudAdmin/server/utils/db.ts`) both connect through this URL. `mud-server`, `mud-admin`, and any future migration tool read **only** from Postgres at runtime. There is no SQLite fallback at runtime; if `MUD_DATABASE_URL` is unset, both services refuse to start.
+
+The legacy SQLite files (`mud.world.db`, `mud.players.db`) exist only as a transition aid:
+
+- During the cutover, `scripts/sqlite-to-pg.mjs` reads them once and bulk-loads the rows into the `world.*` / `players.player_*` tables.
+- After 30 days of clean operation, delete them.
+
+The Postgres service lives in `docker/postgresql/docker-compose.yml` (included from the root compose). It bootstraps two roles (`mud_prod`, `mud_beta`) and two databases on first boot, with passwords read from `docker/postgresql/pg.env`.
+
 ## Worldbuilding & admin responsibilities
 
 The admin (`MudAdmin/`) is the source of truth for game-world content. It owns:
 
-- Migrations (`MudAdmin/server/utils/migrate.ts`) — versioned DDL applied manually via `/admin/_migrate`. Always backs up `mud.db` to `mud.db.bak.<ISO>` before any change.
+- Migrations (`MudAdmin/server/utils/migrate.ts`) — versioned DDL applied manually via `/admin/_migrate`. Always backs up the live database to `mud.db.snapshots/mud.snap.<ISO>.sql` via `pg_dump` before any change.
 - Composite-key schemas (regions, rooms, mobs, items, recipes, etc.) — `MudAdmin/app/utils/composite-key.ts` and the server-side mirror must stay in lockstep.
 - Wiki links (`[[type:id]]`) — `MudAdmin/app/utils/wikiParser.ts`, `WikiIdInput.vue`, `WikiText.vue`, plus the `GET /api/search/entities` endpoint.
-- Snapshots (`/admin/snapshots`) — manual `mud.db.snapshots/*.db` files for human-driven rollback.
+- Snapshots (`/admin/snapshots`) — manual `pg_dump` files for human-driven rollback.
 - Generator scripts for `instanced` regions — Lua files under `ModularMudServer/scripts/regions/generators/` edited in VSCode.
 
-The C++ server reads `mud.db` at boot (`ModularMudServer/SQLiteDatabase.cpp`) and picks up Lua scripts on `ScriptManager::load_all_scripts`. Any new column, table, or script convention must match across all three (admin ↔ DB ↔ C++).
+The C++ server reads Postgres at boot (`ModularMudServer/PostgresDatabase.cpp`) and picks up Lua scripts on `ScriptManager::load_all_scripts`. Any new column, table, or script convention must match across all three (admin ↔ DB ↔ C++).
 
 ## General Rules for Agents
 
