@@ -1,9 +1,6 @@
 {
     # Admin API — needed so Caddy picks up runtime config changes
     admin localhost:2019
-
-    # Trust upstream proxies (Cloudflare) and preserve the original protocol
-    forwarded_scheme https
 }
 
 # ----- prod -----
