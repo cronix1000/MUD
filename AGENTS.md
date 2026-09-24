@@ -47,6 +47,48 @@ The legacy SQLite files (`mud.world.db`, `mud.players.db`) exist only as a trans
 
 The Postgres service lives in `docker/postgresql/docker-compose.yml` (included from the root compose). It bootstraps two roles (`mud_prod`, `mud_beta`) and two databases on first boot, with passwords read from `docker/postgresql/pg.env`.
 
+### Production conn strings — Pattern 1 (env file on disk)
+
+This repo uses **Pattern 1**: secrets live in env files on the host (`docker/.env`, `docker/postgresql/pg.env`, `ModularMudServer.vcxproj.user`), never committed. Each consumer reads one `MUD_DATABASE_URL` env var at process start:
+
+| Consumer | URL source |
+|---|---|
+| `mud-server.exe` (local dev, F5) | `ModularMudServer.vcxproj.user` → `<LocalDebuggerEnvironment>` |
+| `mud-server.exe` (deployed prod) | `docker-compose.yml:84` reads `MUD_DATABASE_URL_PROD` from `docker/.env` |
+| `mud-server-beta` (deployed beta) | `docker-compose.yml:172` reads `MUD_DATABASE_URL_BETA` from `docker/.env` |
+| `MudAdmin` (local dev) | `MudAdmin/.env` → `MUD_DATABASE_URL` |
+| `mud-admin` (deployed prod) | `docker-compose.yml:120` reads `MUD_DATABASE_URL_PROD` |
+| `mud-admin-beta` (deployed beta) | `docker-compose.yml:213` reads `MUD_DATABASE_URL_BETA` |
+
+Canonical URL shapes (no `?options=...` segment — `ModularMudServer/PostgresDatabase.cpp:51-66` and `MudAdmin/server/utils/db.ts:43-52` set `search_path` per-connect, and the role default is set by `docker/postgresql/init/00-bootstrap.sh:60-61`):
+
+```
+# Local dev (Windows + SSH tunnel)
+postgresql://mud_beta:<pw>@127.0.0.1:5432/mud_beta
+
+# Beta on the VPS (inside docker-compose; `postgres` is the docker network alias)
+postgresql://mud_beta:<pw>@postgres:5432/mud_beta
+
+# Prod on the VPS
+postgresql://mud_prod:<pw>@postgres:5432/mud_prod
+```
+
+If you ever need options in a URL for a non-app consumer (psql, ETL), use `+` instead of `%20` for spaces — libpq doesn't decode `%20` inside `?options=...`:
+
+```
+postgresql://mud_beta:<pw>@127.0.0.1:5432/mud_beta?options=-c+search_path=world,players,_meta,public
+```
+
+**Rotation procedure:**
+1. Edit `docker/postgresql/pg.env` on the VPS, set new `MUD_PROD_PASSWORD` (or `MUD_BETA_PASSWORD`).
+2. `cd ~/postgre && docker compose restart postgres` to load the new password.
+3. `cd ~/mud && TAG=prod REGISTRY=ghcr.io/cronix1000 docker compose --profile prod up -d --force-recreate mud-server mud-admin` (or `--profile beta` for beta) to pick up the new `docker/.env` value.
+4. Smoke: `docker logs --tail=20 mud-server | grep "Connected (search_path="`.
+
+**Out of scope for now (deliberate tech debt):**
+- Per-role unique passwords (currently `super_mud_pass_1` is reused across `mud_prod`, `mud_beta`, and `POSTGRES_PASSWORD`). When Pattern 1 starts feeling cramped (3+ environments, ops team, compliance ask), promote to Pattern 2 (distinct passwords per role), then Pattern 3 (docker secrets / Vault).
+- Auto-rotation. Manual for now.
+
 ### Local development DB access
 
 `mud-server.exe` runs on a Windows host and reaches the VPS Postgres through an SSH tunnel (host loopback `127.0.0.1:5432`). Full procedure, including the firewall/rationale, is in `scripts/postgres-connection.md`. The two things that bite newcomers most:
