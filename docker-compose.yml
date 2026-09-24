@@ -111,6 +111,7 @@ services:
     environment:
       HOST: 0.0.0.0
       PORT: 3001
+      MUD_DATABASE_URL: ${MUD_DATABASE_URL_PROD:?MUD_DATABASE_URL_PROD must be set in .env}
     networks:
       - mud-net
     expose:
@@ -203,6 +204,7 @@ services:
     environment:
       HOST: 0.0.0.0
       PORT: 3001
+      MUD_DATABASE_URL: ${MUD_DATABASE_URL_BETA:?MUD_DATABASE_URL_BETA must be set in .env}
     networks:
       - mud-net-beta
     expose:
