@@ -42,23 +42,6 @@ x-gateway-base: &gateway-base
     dockerfile: docker/Dockerfile.gateway
   restart: unless-stopped
 
-x-admin-base: &admin-base
-  build:
-    context: .
-    dockerfile: docker/Dockerfile.web
-    args:
-      APP: MudAdmin
-  restart: unless-stopped
-
-x-client-base: &client-base
-  build:
-    context: .
-    dockerfile: docker/Dockerfile.web
-    args:
-      APP: mudclient
-      WS_URL: ${WS_URL:-ws://localhost:8443/ws}
-  restart: unless-stopped
-
 volumes:
   caddy-data:
   caddy-config:
@@ -111,12 +94,11 @@ services:
       - "${GATEWAY_PORT:-8443}:8443"
 
   mud-admin:
-    <<: *admin-base
     profiles: ["prod"]
-    build: ~         # image-only service; override the anchor's build.
     image: ${REGISTRY:-ghcr.io/cronix1000}/mud-admin:${TAG:-prod}
     container_name: mud-admin
     hostname: mud-admin
+    restart: unless-stopped
     environment:
       MUD_DATABASE_URL: ${MUD_DATABASE_URL_PROD:?MUD_DATABASE_URL_PROD must be set in .env}
       HOST: 0.0.0.0
@@ -130,12 +112,11 @@ services:
         condition: service_healthy
 
   mud-client:
-    <<: *client-base
     profiles: ["prod"]
-    build: ~         # image-only service; override the anchor's build.
     image: ${REGISTRY:-ghcr.io/cronix1000}/mud-client:${TAG:-prod}
     container_name: mud-client
     hostname: mud-client
+    restart: unless-stopped
     environment:
       HOST: 0.0.0.0
       PORT: 3001
