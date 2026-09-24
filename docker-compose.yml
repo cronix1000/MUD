@@ -46,8 +46,8 @@ x-admin-base: &admin-base
   build:
     context: .
     dockerfile: docker/Dockerfile.web
-  args:
-    APP: MudAdmin
+    args:
+      APP: MudAdmin
   restart: unless-stopped
 
 x-client-base: &client-base
@@ -113,6 +113,7 @@ services:
   mud-admin:
     <<: *admin-base
     profiles: ["prod"]
+    build: ~         # image-only service; override the anchor's build.
     image: ${REGISTRY:-ghcr.io/cronix1000}/mud-admin:${TAG:-prod}
     container_name: mud-admin
     hostname: mud-admin
@@ -131,6 +132,7 @@ services:
   mud-client:
     <<: *client-base
     profiles: ["prod"]
+    build: ~         # image-only service; override the anchor's build.
     image: ${REGISTRY:-ghcr.io/cronix1000}/mud-client:${TAG:-prod}
     container_name: mud-client
     hostname: mud-client
