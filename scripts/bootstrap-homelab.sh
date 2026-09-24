@@ -68,6 +68,9 @@ BETA_WS_URL=ws://beta.example.com:8443/ws
 TZ=UTC
 LOG_LEVEL=info
 IDLE_TIMEOUT_S=1800
+# For QA against live prod data, set these and run `bash scripts/sync-prod-to-beta.sh`:
+#   SYNC_HOST=mud@prod.example.com
+#   SYNC_REMOTE_SRC=/home/mud/data/prod/mud.world.db
 EOF
     chmod 600 .env
     echo
@@ -92,6 +95,11 @@ fi
 
 log "pulling $PROFILE images from $REGISTRY"
 TAG="$PROFILE" REGISTRY="$REGISTRY" docker compose "--profile=$PROFILE" pull --ignore-pull-failures
+
+if [ ! -f "$REPO_DIR/data/$PROFILE/mud.world.db" ] && [ "$PROFILE" = "beta" ]; then
+  log "data/$PROFILE/ is empty; running scripts/reseed-beta.sh"
+  bash "$REPO_DIR/scripts/reseed-beta.sh"
+fi
 
 log "starting $PROFILE stack"
 TAG="$PROFILE" REGISTRY="$REGISTRY" docker compose "--profile=$PROFILE" up -d --remove-orphans

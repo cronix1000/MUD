@@ -13,8 +13,17 @@
 #
 # Or build locally with:
 #   TAG=dev docker compose --profile prod build
+#
+# Postgres lives in docker/postgresql/docker-compose.yml and is shared by
+# both profiles via the include directive below. Bring it up once on the
+# host before either MUD profile, and it will persist across redeploys.
 
 name: mud
+
+include:
+  - path: ./docker/postgresql/docker-compose.yml
+    project_directory: ./docker/postgresql
+    name: mud-postgres
 
 x-server-base: &server-base
   build:
@@ -37,11 +46,9 @@ x-admin-base: &admin-base
   build:
     context: .
     dockerfile: docker/Dockerfile.web
-    args:
-      APP: MudAdmin
+  args:
+    APP: MudAdmin
   restart: unless-stopped
-  volumes:
-    - mud-data:/data:ro
 
 x-client-base: &client-base
   build:
@@ -53,8 +60,6 @@ x-client-base: &client-base
   restart: unless-stopped
 
 volumes:
-  mud-data:
-  mud-data-beta:
   caddy-data:
   caddy-config:
 
@@ -76,16 +81,16 @@ services:
     container_name: mud-server
     hostname: mud-server
     environment:
-      MUD_DB_PATH: /data/mud.world.db
-      MUD_PLAYERS_DB: /data/mud.players.db
+      MUD_DATABASE_URL: ${MUD_DATABASE_URL_PROD:?MUD_DATABASE_URL_PROD must be set in .env}
       PORT: 27015
       TZ: ${TZ:-UTC}
-    volumes:
-      - mud-data:/data
     networks:
       - mud-net
     expose:
       - "27015"
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   mud-gateway:
     <<: *gateway-base
@@ -112,14 +117,16 @@ services:
     container_name: mud-admin
     hostname: mud-admin
     environment:
-      MUD_DB_PATH: /data/mud.world.db
-      MUD_PLAYERS_DB: /data/mud.players.db
+      MUD_DATABASE_URL: ${MUD_DATABASE_URL_PROD:?MUD_DATABASE_URL_PROD must be set in .env}
       HOST: 0.0.0.0
       PORT: 3000
     networks:
       - mud-net
     expose:
       - "3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   mud-client:
     <<: *client-base
@@ -162,16 +169,16 @@ services:
     container_name: mud-server-beta
     hostname: mud-server-beta
     environment:
-      MUD_DB_PATH: /data/mud.world.db
-      MUD_PLAYERS_DB: /data/mud.players.db
+      MUD_DATABASE_URL: ${MUD_DATABASE_URL_BETA:?MUD_DATABASE_URL_BETA must be set in .env}
       PORT: 27015
       TZ: ${TZ:-UTC}
-    volumes:
-      - mud-data-beta:/data
     networks:
       - mud-net-beta
     expose:
       - "27015"
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   mud-gateway-beta:
     <<: *gateway-base
@@ -203,16 +210,16 @@ services:
     profiles: ["beta"]
     restart: unless-stopped
     environment:
-      MUD_DB_PATH: /data/mud.world.db
-      MUD_PLAYERS_DB: /data/mud.players.db
+      MUD_DATABASE_URL: ${MUD_DATABASE_URL_BETA:?MUD_DATABASE_URL_BETA must be set in .env}
       HOST: 0.0.0.0
       PORT: 3000
-    volumes:
-      - mud-data-beta:/data
     networks:
       - mud-net-beta
     expose:
       - "3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   mud-client-beta:
     build:
@@ -220,7 +227,7 @@ services:
       dockerfile: docker/Dockerfile.web
       args:
         APP: mudclient
-        WS_URL: ${BETA_WS_URL:-10.0.0.223:18080/ws}
+        WS_URL: ${BETA_WS_URL:-<lan-host>:18080/ws}
     image: ${REGISTRY:-ghcr.io/cronix1000}/mud-client:${TAG:-beta}
     container_name: mud-client-beta
     hostname: mud-client-beta
@@ -229,8 +236,6 @@ services:
     environment:
       HOST: 0.0.0.0
       PORT: 3001
-    volumes:
-      - mud-data-beta:/data
     networks:
       - mud-net-beta
     expose:

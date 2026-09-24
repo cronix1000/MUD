@@ -1,19 +1,10 @@
-import { copyFileSync, existsSync, unlinkSync } from 'node:fs'
+import { copyFileSync, existsSync, statSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { runPgDump, restoreFromSql } from '../../utils/migrate'
 
-function dbPath(): string {
-  const envRoot = process.env.MUD_DB_PATH
-  const candidates = [
-    envRoot,
-    resolve(process.cwd(), 'ModularMudServer', 'mud.db'),
-    resolve(process.cwd(), '..', 'ModularMudServer', 'mud.db'),
-    resolve(process.cwd(), '..', '..', 'ModularMudServer', 'mud.db'),
-    resolve(process.cwd(), '..', '..', '..', 'ModularMudServer', 'mud.db'),
-    resolve(process.cwd(), '..', '..', '..', '..', 'ModularMudServer', 'mud.db'),
-  ].filter(Boolean) as string[]
-  const found = candidates.find((p) => existsSync(p))
-  if (!found) throw new Error('mud.db not found')
-  return found
+function snapshotsDir(): string {
+  return process.env.MUD_SNAPSHOTS_DIR
+    ?? resolve(process.cwd(), '..', 'ModularMudServer', 'mud.db.snapshots')
 }
 
 export default defineEventHandler(async (event) => {
@@ -21,9 +12,14 @@ export default defineEventHandler(async (event) => {
   if (!body?.path) throw createError({ statusCode: 400, statusMessage: 'path required' })
   if (!existsSync(body.path)) throw createError({ statusCode: 404, statusMessage: 'snapshot not found' })
 
-  const db = dbPath()
-  const safetyBackup = `${db}.pre-restore.${Date.now()}`
-  copyFileSync(db, safetyBackup)
-  copyFileSync(body.path, db)
-  return { restored: body.path, safety_backup: safetyBackup }
+  const dir = snapshotsDir()
+  const resolved = resolve(body.path)
+  if (!resolved.startsWith(resolve(dir))) {
+    throw createError({ statusCode: 400, statusMessage: 'snapshot path must be inside mud.db.snapshots/' })
+  }
+
+  const safetyBackup = resolve(dir, `mud.snap.pre-restore.${Date.now()}.sql`)
+  await runPgDump(safetyBackup)
+  await restoreFromSql(resolved)
+  return { restored: resolved, safety_backup: safetyBackup, size: statSync(safetyBackup).size }
 })

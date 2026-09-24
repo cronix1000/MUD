@@ -27,7 +27,7 @@ async function createSnapshot() {
 }
 
 async function restore(s: Snapshot) {
-  if (!confirm(`Restore ${s.path.split(/[\\/]/).pop()}?\n\nThis will overwrite the current mud.db. A safety backup is created first.`)) return
+  if (!confirm(`Restore ${s.path.split(/[\\/]/).pop()}?\n\nThis will overwrite the live database (MUD_DATABASE_URL). A safety backup is created first.`)) return
   restoring.value = s.path
   error.value = null
   success.value = null
@@ -71,7 +71,7 @@ function fmtBytes(n: number) {
       <div>
         <h2 class="text-2xl font-semibold">Snapshots</h2>
         <p class="text-neutral-400 text-sm mt-1">
-          Point-in-time copies of <code>mud.db</code>. Restore replaces the live DB and creates a safety backup first.
+          Point-in-time copies of the live database (Postgres <code>pg_dump</code> snapshots). Restore replaces the live DB and creates a safety backup first.
         </p>
       </div>
       <button
