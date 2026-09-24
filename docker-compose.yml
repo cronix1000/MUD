@@ -124,9 +124,6 @@ services:
     ports:
       - "${HTTP_PORT:-80}:80"
       - "${HTTPS_PORT:-443}:443"
-    environment:
-      PROD_DOMAIN: ${PROD_DOMAIN:?PROD_DOMAIN must be set in .env}
-      BETA_DOMAIN: ${BETA_DOMAIN:?BETA_DOMAIN must be set in .env}
     volumes:
       - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
@@ -219,9 +216,6 @@ services:
     ports:
       - "${BETA_HTTP_PORT:-18080}:80"
       - "${BETA_HTTPS_PORT:-18443}:443"
-    environment:
-      PROD_DOMAIN: ${PROD_DOMAIN:?PROD_DOMAIN must be set in .env}
-      BETA_DOMAIN: ${BETA_DOMAIN:?BETA_DOMAIN must be set in .env}
     volumes:
       - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
     networks:

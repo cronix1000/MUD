@@ -3,7 +3,7 @@
     admin localhost:2019
 
     # ----- prod -----
-    https://{$PROD_DOMAIN} {
+    https://tower-mud.unlrealities.ca {
         encode zstd gzip
 
         handle /ws* {
@@ -28,7 +28,7 @@
     }
 
     # ----- beta -----
-    https://{$BETA_DOMAIN} {
+    https://beta.tower-mud.unlrealities.ca {
         encode zstd gzip
 
         handle /ws* {
