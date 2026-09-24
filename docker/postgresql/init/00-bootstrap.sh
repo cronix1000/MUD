@@ -56,4 +56,9 @@ GRANT ALL ON SCHEMA public TO mud_beta;
 ALTER SCHEMA public OWNER TO mud_beta;
 EOSQL
 
+psql -v ON_ERROR_STOP=1 --username postgres --dbname postgres <<'EOSQL'
+ALTER ROLE mud_prod SET search_path TO world, players, _meta, public;
+ALTER ROLE mud_beta SET search_path TO world, players, _meta, public;
+EOSQL
+
 echo "[postgres-init] bootstrapped mud_prod and mud_beta"

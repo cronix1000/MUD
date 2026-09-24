@@ -36,7 +36,7 @@ The C++ server (`ModularMudServer`) is intentionally **excluded from npm workspa
 
 ## Database — Postgres everywhere
 
-World content (regions, rooms, items, mobs, …) and player accounts live in a single Postgres 16 instance configured by `MUD_DATABASE_URL` (libpq-style URL, with `options=-c search_path=world,players,_meta,public` set so unqualified table names resolve into the right schema).
+World content (regions, rooms, items, mobs, …) and player accounts live in a single Postgres 16 instance configured by `MUD_DATABASE_URL` (libpq-style URL; the role-level `search_path = world, players, _meta, public` is set by `docker/postgresql/init/00-bootstrap.sh` so unqualified table names resolve into the right schema without needing URL options).
 
 The C++ server (`ModularMudServer/PostgresDatabase.cpp`) and the admin UI (`MudAdmin/server/utils/db.ts`) both connect through this URL. `mud-server`, `mud-admin`, and any future migration tool read **only** from Postgres at runtime. There is no SQLite fallback at runtime; if `MUD_DATABASE_URL` is unset, both services refuse to start.
 
@@ -46,6 +46,15 @@ The legacy SQLite files (`mud.world.db`, `mud.players.db`) exist only as a trans
 - After 30 days of clean operation, delete them.
 
 The Postgres service lives in `docker/postgresql/docker-compose.yml` (included from the root compose). It bootstraps two roles (`mud_prod`, `mud_beta`) and two databases on first boot, with passwords read from `docker/postgresql/pg.env`.
+
+### Local development DB access
+
+`mud-server.exe` runs on a Windows host and reaches the VPS Postgres through an SSH tunnel (host loopback `127.0.0.1:5432`). Full procedure, including the firewall/rationale, is in `scripts/postgres-connection.md`. The two things that bite newcomers most:
+
+1. `mud-server.exe` issues `SET search_path TO world, players, _meta, public` itself on every connect (`ModularMudServer/PostgresDatabase.cpp:54-58`). MudAdmin's pool does the same on each new client (`MudAdmin/server/utils/db.ts:47-50`). The role default is set by `docker/postgresql/init/00-bootstrap.sh` for fresh volumes and `01-search-path.sh` for existing ones. **None of the three need URL `?options=...`**. Note: when both URL options and the C++/admin `SET` are present, the per-session URL option wins — so URLs should NOT include `?options=-c%20search_path=...`.
+2. Point the dev tunnel at `mud_beta`, not `mud_prod`. Beta is a QA mirror; admin edits against prod hit live player data. `scripts/pg-sync-prod-to-beta.sh` mirrors prod world content into beta.
+
+A template URL lives in `ModularMudServer/.env.example`.
 
 ## Worldbuilding & admin responsibilities
 

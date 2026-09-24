@@ -32,8 +32,9 @@ function defaultConnectionString(): string {
   const url = process.env.MUD_DATABASE_URL
   if (!url) {
     throw new Error(
-      'MUD_DATABASE_URL is required (e.g. postgresql://mud_prod:...@postgres:5432/mud_prod?options=-c%20search_path=world,players,_meta,public). ' +
-      'See docker/.env.example for the full template.',
+      'MUD_DATABASE_URL is required (e.g. postgresql://mud_prod:...@postgres:5432/mud_prod). ' +
+      'The search_path default is set at the role level by docker/postgresql/init/00-bootstrap.sh; ' +
+      'see docker/.env.example for the full template.',
     )
   }
   return url
@@ -42,6 +43,11 @@ function defaultConnectionString(): string {
 export function getPool(): pg.Pool {
   if (_pool) return _pool
   _pool = new pg.Pool({ connectionString: defaultConnectionString() })
+  _pool.on('connect', (client) => {
+    client.query('SET search_path TO world, players, _meta, public').catch((err) => {
+      console.error('[db] failed to set search_path:', err)
+    })
+  })
   return _pool
 }
 
