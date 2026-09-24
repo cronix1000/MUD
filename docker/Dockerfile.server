@@ -80,15 +80,12 @@ WORKDIR /mud
 COPY --from=builder /src/build/bin/ModularMudServer   /mud/ModularMudServer
 COPY --from=builder /src/scripts/                    /mud/scripts/
 COPY --from=builder /src/regions/                    /mud/regions/
-COPY --from=builder /src/mud.db                      /mud/mud.world.db
 
 COPY docker/entrypoint-server.sh /usr/local/bin/entrypoint-server.sh
 RUN chmod +x /usr/local/bin/entrypoint-server.sh \
  && chown -R mud:mud /mud
 
-ENV MUD_DB_PATH=/mud/mud.world.db \
-    MUD_PLAYERS_DB=/mud/mud.players.db \
-    MUD_DATABASE_URL= \
+ENV MUD_DATABASE_URL= \
     PORT=27015
 
 EXPOSE 27015
