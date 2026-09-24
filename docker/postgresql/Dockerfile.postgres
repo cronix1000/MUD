@@ -1,0 +1,16 @@
+# syntax=docker/dockerfile:1.6
+# docker/postgresql/Dockerfile.postgres
+#
+# Tiny image layered on top of postgres:16-alpine that copies the bootstrap
+# scripts into the standard /docker-entrypoint-initdb.d/ directory. The init
+# scripts run exactly once, the first time the pgdata volume is mounted empty.
+#
+# Keeping the scripts in the image (rather than a bind mount or named volume
+# population sidecar) means a fresh checkout + `docker compose up` is
+# self-bootstrapping — no extra host-side prep step.
+
+FROM postgres:16-alpine
+
+COPY init/ /docker-entrypoint-initdb.d/
+
+RUN chmod +x /docker-entrypoint-initdb.d/*.sh

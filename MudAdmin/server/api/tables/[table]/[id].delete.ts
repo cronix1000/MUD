@@ -1,7 +1,7 @@
 import { assertTable, deleteRow } from '../../../utils/db'
 import { decodeCompositeKey, isCompositeKey } from '../../../utils/composite-key'
 
-export default defineEventHandler((event) => {
+export default defineEventHandler(async (event) => {
   const table = getRouterParam(event, 'table')!
   const rawId = getRouterParam(event, 'id')!
   assertTable(table)

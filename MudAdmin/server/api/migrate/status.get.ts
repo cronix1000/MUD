@@ -1,9 +1,11 @@
 import { getAppliedMigrations, getPendingMigrations, listBackups } from '../../utils/migrate'
 
-export default defineEventHandler(() => {
-  const applied = getAppliedMigrations()
-  const pending = getPendingMigrations()
-  const backups = listBackups()
+export default defineEventHandler(async () => {
+  const [applied, pending, backups] = await Promise.all([
+    getAppliedMigrations(),
+    getPendingMigrations(),
+    listBackups(),
+  ])
   return {
     applied,
     pending: pending.map((p) => ({

@@ -3,21 +3,14 @@ import { existsSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { resolve } from 'node:path'
 
-const cwd = process.cwd()
-const root = resolve(cwd, '..', '..')
-const serverDir = resolve(root, 'ModularMudServer')
-const adminDir = resolve(root, 'MudAdmin')
-
-const envPath = process.env.MUD_DB_PATH ?? resolve(serverDir, 'mud.world.db')
-const playersPath = process.env.MUD_PLAYERS_DB ?? envPath.replace(/\.world\.db$/, '.players.db')
-
-if (!existsSync(envPath)) {
-  console.error(`world DB not found at ${envPath}`)
-  process.exit(1)
+if (!process.env.MUD_DATABASE_URL) {
+  console.error('MUD_DATABASE_URL is required (e.g. postgresql://mud_prod:pw@host:5432/mud_prod)')
+  process.exit(2)
 }
 
-process.env.MUD_DB_PATH = envPath
-process.env.MUD_PLAYERS_DB = playersPath
+const cwd = process.cwd()
+const root = resolve(cwd, '..', '..')
+const adminDir = resolve(root, 'MudAdmin')
 
 const args = ['--prefix', adminDir, 'exec', '--', 'nuxt', 'prepare']
 const prep = spawnSync('npm', args, { stdio: 'inherit', shell: process.platform === 'win32' })
@@ -35,10 +28,10 @@ if (!existsSync(tsxPath)) {
 const runner = resolve(adminDir, 'server', 'utils', 'migrate.cli.ts')
 const run = spawnSync(
   process.execPath,
-  [tsxPath, runner],
+  [tsxPath, runner, ...process.argv.slice(2)],
   {
     stdio: 'inherit',
-    env: { ...process.env, MUD_DB_PATH: envPath, MUD_PLAYERS_DB: playersPath },
+    env: process.env,
   },
 )
 process.exit(run.status ?? 1)

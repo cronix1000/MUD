@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve as resolvePath, join } from 'node:path'
-import { getDb } from '../../../utils/db'
+import { getPool } from '../../../utils/db'
 
 function scriptsRoot(): string {
   const envRoot = process.env.MUD_SCRIPTS_PATH
@@ -20,17 +20,20 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Invalid region key' })
   }
 
-  const db = getDb()
-  const region = db
-    .prepare(`select id, name, region_kind, generator_script, template_config_json, tutorial_steps_json from world_regions where world_id = ? and id = ?`)
-    .get(world_id, region_id) as {
-      id: string
-      name: string
-      region_kind: string | null
-      generator_script: string | null
-      template_config_json: string | null
-      tutorial_steps_json: string | null
-    } | undefined
+  const res = await getPool().query<{
+    id: string
+    name: string
+    region_kind: string | null
+    generator_script: string | null
+    template_config_json: string | null
+    tutorial_steps_json: string | null
+  }>(
+    `select id, name, region_kind, generator_script, template_config_json, tutorial_steps_json
+       from world.world_regions
+      where world_id = $1 and id = $2`,
+    [world_id, region_id],
+  )
+  const region = res.rows[0]
 
   if (!region) {
     throw createError({ statusCode: 404, statusMessage: `Region not found: ${composite}` })
