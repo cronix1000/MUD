@@ -3,7 +3,7 @@
     admin localhost:2019
 
     # ----- prod -----
-    https://${PROD_DOMAIN} {
+    https://{$PROD_DOMAIN} {
         encode zstd gzip
 
         handle /ws* {
@@ -28,7 +28,7 @@
     }
 
     # ----- beta -----
-    https://${BETA_DOMAIN} {
+    https://{$BETA_DOMAIN} {
         encode zstd gzip
 
         handle /ws* {
