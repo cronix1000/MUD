@@ -1,6 +1,9 @@
 {
     # Admin API — needed so Caddy picks up runtime config changes
     admin localhost:2019
+
+    # Trust upstream proxies (Cloudflare) and preserve the original protocol
+    forwarded_scheme https
 }
 
 # ----- prod -----
@@ -10,6 +13,7 @@ https://tower-mud.unlrealities.ca {
     handle /ws* {
         reverse_proxy mud-gateway:8443 {
             header_up Host {host}
+            header_up X-Forwarded-Proto https
         }
     }
 
@@ -17,6 +21,7 @@ https://tower-mud.unlrealities.ca {
         reverse_proxy mud-admin:3000 {
             header_up Host {host}
             header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-Proto https
         }
     }
 
@@ -24,6 +29,7 @@ https://tower-mud.unlrealities.ca {
         reverse_proxy mud-client:3001 {
             header_up Host {host}
             header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-Proto https
         }
     }
 }
@@ -35,6 +41,7 @@ https://beta.tower-mud.unlrealities.ca {
     handle /ws* {
         reverse_proxy mud-gateway-beta:8443 {
             header_up Host {host}
+            header_up X-Forwarded-Proto https
         }
     }
 
@@ -42,6 +49,7 @@ https://beta.tower-mud.unlrealities.ca {
         reverse_proxy mud-admin-beta:3000 {
             header_up Host {host}
             header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-Proto https
         }
     }
 
@@ -49,6 +57,7 @@ https://beta.tower-mud.unlrealities.ca {
         reverse_proxy mud-client-beta:3001 {
             header_up Host {host}
             header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-Proto https
         }
     }
 }

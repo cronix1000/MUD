@@ -18,6 +18,7 @@ RUN apt-get update \
           git \
           liblua5.3-dev \
           libpqxx-dev \
+          libsqlite3-dev \
           nlohmann-json3-dev \
       && break; \
       echo "apt-get install failed (attempt $i), refreshing and retrying..."; \
@@ -62,6 +63,7 @@ RUN apt-get update \
           libgcc-s1 \
           liblua5.3-0 \
           libpqxx-6.4 \
+          libsqlite3-0 \
           libstdc++6 \
           postgresql-client \
           tini \
