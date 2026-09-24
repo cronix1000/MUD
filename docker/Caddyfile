@@ -1,26 +1,54 @@
-:80 {
-    encode zstd gzip
+{
+    # Admin API — needed so Caddy picks up runtime config changes
+    admin localhost:2019
 
-    # WebSocket Gateway
-    handle /ws* {
-        reverse_proxy mud-gateway-beta:8443 {
-            header_up Host {host}
+    # ----- prod -----
+    https://${PROD_DOMAIN} {
+        encode zstd gzip
+
+        handle /ws* {
+            reverse_proxy mud-gateway:8443 {
+                header_up Host {host}
+            }
+        }
+
+        handle_path /admin* {
+            reverse_proxy mud-admin:3000 {
+                header_up Host {host}
+                header_up X-Real-IP {remote_host}
+            }
+        }
+
+        handle {
+            reverse_proxy mud-client:3001 {
+                header_up Host {host}
+                header_up X-Real-IP {remote_host}
+            }
         }
     }
 
-    # Admin Panel
-    handle_path /admin* {
-        reverse_proxy mud-admin-beta:3000 {
-            header_up Host {host}
-            header_up X-Real-IP {remote_host}
-        }
-    }
+    # ----- beta -----
+    https://${BETA_DOMAIN} {
+        encode zstd gzip
 
-    # Default: Mud Game Client
-    handle {
-        reverse_proxy mud-client-beta:3001 {
-            header_up Host {host}
-            header_up X-Real-IP {remote_host}
+        handle /ws* {
+            reverse_proxy mud-gateway-beta:8443 {
+                header_up Host {host}
+            }
+        }
+
+        handle_path /admin* {
+            reverse_proxy mud-admin-beta:3000 {
+                header_up Host {host}
+                header_up X-Real-IP {remote_host}
+            }
+        }
+
+        handle {
+            reverse_proxy mud-client-beta:3001 {
+                header_up Host {host}
+                header_up X-Real-IP {remote_host}
+            }
         }
     }
 }
