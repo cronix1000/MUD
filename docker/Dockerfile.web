@@ -32,7 +32,7 @@ RUN if [ "$(echo "$APP" | tr '[:upper:]' '[:lower:]')" = "mudclient" ]; then \
         const fs=require('fs'); \
         const p='MudClient/nuxt.config.ts'; \
         let s=fs.readFileSync(p,'utf8'); \
-        s=s.replace(/mudWsUrl:\s*['\"][^'\"]*['\"]/, \"mudWsUrl: 'ws://${WS_URL}'\"); \
+        s=s.replace(/mudWsUrl:\s*['\"][^'\"]*['\"]/, \"mudWsUrl: '${WS_URL}'\"); \
         fs.writeFileSync(p,s);"; \
     fi
 
