@@ -31,14 +31,9 @@ jobs:
             platforms: linux/amd64
           - image: admin
             dockerfile: docker/Dockerfile.web
-            build-args: |
-              APP=MudAdmin
             platforms: linux/amd64
           - image: client
             dockerfile: docker/Dockerfile.web
-            build-args: |
-              APP=mudclient
-              WS_URL=wss://tower-mud.unlrealities.ca/ws
             platforms: linux/amd64
     steps:
       - uses: actions/checkout@v4
@@ -113,6 +108,8 @@ jobs:
           push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: ${{ matrix.build-args }}
+          build-args: |
+            APP=${{ matrix.image == 'admin' && 'MudAdmin' || 'mudclient' }}
+            ${{ matrix.image == 'client' && 'WS_URL=wss://tower-mud.unlrealities.ca/ws' || '' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
