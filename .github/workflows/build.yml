@@ -31,14 +31,14 @@ jobs:
             platforms: linux/amd64
           - image: admin
             dockerfile: docker/Dockerfile.web
-            build-args:
-              - APP=MudAdmin
+            build-args: |
+              APP=MudAdmin
             platforms: linux/amd64
           - image: client
             dockerfile: docker/Dockerfile.web
-            build-args:
-              - APP=mudclient
-              - WS_URL=wss://tower-mud.unlrealities.ca/ws
+            build-args: |
+              APP=mudclient
+              WS_URL=wss://tower-mud.unlrealities.ca/ws
             platforms: linux/amd64
     steps:
       - uses: actions/checkout@v4
