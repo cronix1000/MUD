@@ -32,7 +32,7 @@ https://tower-mud.unlrealities.ca {
 }
 
 # ----- beta -----
-https://beta.tower-mud.unlrealities.ca {
+https://beta-tower-mud.unlrealities.ca {
     encode zstd gzip
 
     handle /ws* {
