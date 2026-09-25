@@ -27,22 +27,24 @@ COPY MudAdmin/ MudAdmin/
 COPY MudClient/ MudClient/
 
 # 2. Backup and patch nuxt.config.ts for MudClient
-RUN if [ "$APP" = "mudclient" ]; then \
-      cp MudClient/nuxt.config.ts MudClient/nuxt.config.ts.orig ; \
-      node -e "\
-        const fs = require('fs'); \
-        const p = 'MudClient/nuxt.config.ts'; \
-        let s = fs.readFileSync(p, 'utf8'); \
-        s = s.replace(/mudWsUrl:\s*['\"][^'\"]*['\"]/, \"mudWsUrl: 'ws://${WS_URL}'\"); \
-        fs.writeFileSync(p, s);" ; \
-    fi
+RUN case "$APP" in \
+      mudclient|mudClient|MudClient) \
+        cp MudClient/nuxt.config.ts MudClient/nuxt.config.ts.orig ; \
+        node -e "\
+          const fs = require('fs'); \
+          const p = 'MudClient/nuxt.config.ts'; \
+          let s = fs.readFileSync(p, 'utf8'); \
+          s = s.replace(/mudWsUrl:\s*['\"][^'\"]*['\"]/, \"mudWsUrl: 'ws://${WS_URL}'\"); \
+          fs.writeFileSync(p, s);" ;; \
+    esac
 
 # 3. Build target application
-RUN if [ "$APP" = "mudclient" ]; then \
-      npm --workspace mudclient run build ; \
-    else \
-      npm --workspace MudAdmin run build ; \
-    fi
+RUN case "$APP" in \
+      mudclient|mudClient|MudClient) \
+        npm --workspace mudclient run build ;; \
+      *) \
+        npm --workspace MudAdmin run build ;; \
+    esac
 
 # --- Stage 3: Runtime ---
 FROM node:22-alpine AS runtime
@@ -52,8 +54,14 @@ WORKDIR /srv/app
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 web
 
-# Copy only the target app's .output (glob /repo/*/.output was racing both apps' caches)
-COPY --from=build --chown=web:nodejs /repo/${APP}/.output /srv/app
+# Stage both apps' .output dirs into named tmp paths and pick the right one.
+# Globbing (/repo/*/.output) raced cached layers from the other workspace.
+COPY --from=build --chown=web:nodejs /repo/mudclient/.output /tmp/mc.output
+COPY --from=build --chown=web:nodejs /repo/MudAdmin/.output  /tmp/admin.output
+RUN case "$APP" in \
+      mudclient|mudClient|MudClient) cp -a /tmp/mc.output/. /srv/app/ ;; \
+      *)                              cp -a /tmp/admin.output/. /srv/app/ ;; \
+    esac
 
 USER web
 
