@@ -9,18 +9,29 @@
 # Pre-requisites on the host:
 #   * docker + docker compose plugin installed
 #   * user is in the docker group (or use sudo)
-#   * repo cloned at $REPO_DIR (default ~/mud)
+#   * repo cloned at $REPO_DIR (default ~/MUD on the prod VPS)
 #   * an .env file at $REPO_DIR/.env that matches the profile
 #
 set -euo pipefail
 
 PROFILE="${1:-prod}"
 TAG="${2:-latest}"
-REPO_DIR="${REPO_DIR:-$HOME/mud}"
+
+# Resolve REPO_DIR: honour env var if set; otherwise look for ~/MUD then ~/mud.
+if [[ -z "${REPO_DIR:-}" ]]; then
+  if [[ -d "$HOME/MUD" ]]; then
+    REPO_DIR="$HOME/MUD"
+  elif [[ -d "$HOME/mud" ]]; then
+    REPO_DIR="$HOME/mud"
+  else
+    echo "[deploy] error: REPO_DIR not set and neither \$HOME/MUD nor \$HOME/mud exists" >&2
+    exit 1
+  fi
+fi
 
 case "$PROFILE" in
-  prod) COMPOSE_FLAGS="--profile prod" ;;
-  beta) COMPOSE_FLAGS="--profile beta" ;;
+  prod) BRANCH="${BRANCH:-main}";     COMPOSE_FLAGS="--profile prod" ;;
+  beta) BRANCH="${BRANCH:-beta}";     COMPOSE_FLAGS="--profile beta" ;;
   *)
     echo "usage: $0 {prod|beta} [tag]" >&2
     exit 64
@@ -29,11 +40,15 @@ esac
 
 cd "$REPO_DIR"
 
-echo "[deploy] profile=$PROFILE tag=$TAG repo=$REPO_DIR"
+echo "[deploy] profile=$PROFILE tag=$TAG branch=$BRANCH repo=$REPO_DIR"
 
 echo "[deploy] refresh repo"
 git fetch --quiet origin
-git reset --hard "origin/main"
+# Make sure the branch exists locally; create it tracking origin if not.
+if ! git show-ref --verify --quiet "refs/heads/$BRANCH"; then
+  git branch --track "$BRANCH" "origin/$BRANCH"
+fi
+git reset --hard "origin/$BRANCH"
 
 echo "[deploy] load .env (if present)"
 if [[ -f .env ]]; then
