@@ -45,24 +45,23 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up SSH key
-        uses: webfactory/ssh-agent@v0.10.0
-        with:
-          ssh-private-key: ${{ secrets.PROD_SSH_KEY }}
-
-      - name: Verify SSH key fingerprint
-        env:
-          KEY: ${{ secrets.PROD_SSH_KEY }}
         run: |
-          # Don't print the key, only its fingerprint and length.
-          printf '%s' "$KEY" | ssh-keygen -lf - 2>/dev/null || echo "ssh-keygen could not parse the secret"
-          echo "key byte length: $(printf '%s' "$KEY" | wc -c)"
-          echo "key has BEGIN marker: $(printf '%s' "$KEY" | grep -q 'BEGIN OPENSSH PRIVATE KEY' && echo yes || echo no)"
-          echo "key has END marker: $(printf '%s' "$KEY" | grep -q 'END OPENSSH PRIVATE KEY' && echo yes || echo no)"
-          echo "key line count: $(printf '%s' "$KEY" | wc -l)"
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          # Normalise CRLF -> LF and trim trailing whitespace, in case the
+          # secret was pasted with Windows line endings.
+          printf '%s\n' "${{ secrets.PROD_SSH_KEY }}" \
+            | tr -d '\r' \
+            | sed 's/[[:space:]]*$//' \
+            > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # Validate the key before attempting to use it.
+          ssh-keygen -lf ~/.ssh/deploy_key || { echo "key invalid"; exit 1; }
 
       - name: Deploy
         run: |
           ssh -o StrictHostKeyChecking=no \
+              -i ~/.ssh/deploy_key \
               ${{ secrets.PROD_USER }}@${{ secrets.PROD_HOST }} \
               "bash -s -- prod ${{ inputs.tag || 'prod' }}" \
               < scripts/deploy-remote.sh
