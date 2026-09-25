@@ -8,8 +8,8 @@ WORKDIR /repo
 RUN apk add --no-cache libc6-compat python3 make g++
 
 COPY package.json package-lock.json ./
-COPY MudAdmin/package.json MudAdmin/package.json
-COPY MudClient/package.json MudClient/package.json
+COPY MudAdmin/package.json    MudAdmin/package.json
+COPY MudClient/package.json   MudClient/package.json
 COPY mud-ws-gateway/package.json mud-ws-gateway/package.json
 
 RUN npm ci
@@ -22,46 +22,39 @@ WORKDIR /repo
 
 COPY --from=deps /repo /repo
 
-# 1. Copy source files FIRST
-COPY MudAdmin/ MudAdmin/
+COPY MudAdmin/  MudAdmin/
 COPY MudClient/ MudClient/
 
-# 2. Backup and patch nuxt.config.ts for MudClient
-RUN case "$APP" in \
-      mudclient|mudClient|MudClient) \
-        cp MudClient/nuxt.config.ts MudClient/nuxt.config.ts.orig ; \
-        node -e "\
-          const fs = require('fs'); \
-          const p = 'MudClient/nuxt.config.ts'; \
-          let s = fs.readFileSync(p, 'utf8'); \
-          s = s.replace(/mudWsUrl:\s*['\"][^'\"]*['\"]/, \"mudWsUrl: 'ws://${WS_URL}'\"); \
-          fs.writeFileSync(p, s);" ;; \
-    esac
+# Stamp the WS URL into MudClient's nuxt.config.ts before building it.
+RUN if [ "$(echo "$APP" | tr '[:upper:]' '[:lower:]')" = "mudclient" ]; then \
+      cp MudClient/nuxt.config.ts MudClient/nuxt.config.ts.orig && \
+      node -e "\
+        const fs=require('fs'); \
+        const p='MudClient/nuxt.config.ts'; \
+        let s=fs.readFileSync(p,'utf8'); \
+        s=s.replace(/mudWsUrl:\s*['\"][^'\"]*['\"]/, \"mudWsUrl: 'ws://${WS_URL}'\"); \
+        fs.writeFileSync(p,s);"; \
+    fi
 
-# 3. Build target application
-RUN case "$APP" in \
-      mudclient|mudClient|MudClient) \
-        npm --workspace mudclient run build ;; \
-      *) \
-        npm --workspace MudAdmin run build ;; \
-    esac
+# Build the target app into a known location: /repo/app-output.
+# Only one workspace builds per image, so we name the output dir ourselves
+# instead of relying on the per-workspace .output path.
+RUN if [ "$(echo "$APP" | tr '[:upper:]' '[:lower:]')" = "mudclient" ]; then \
+      npm --workspace mudclient run build && \
+      cp -a /repo/mudclient/.output /repo/app-output; \
+    else \
+      npm --workspace MudAdmin run build && \
+      cp -a /repo/MudAdmin/.output  /repo/app-output; \
+    fi
 
 # --- Stage 3: Runtime ---
 FROM node:22-alpine AS runtime
-ARG APP=mudclient
 WORKDIR /srv/app
 
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 web
 
-# Stage both apps' .output dirs into named tmp paths and pick the right one.
-# Globbing (/repo/*/.output) raced cached layers from the other workspace.
-COPY --from=build --chown=web:nodejs /repo/mudclient/.output /tmp/mc.output
-COPY --from=build --chown=web:nodejs /repo/MudAdmin/.output  /tmp/admin.output
-RUN case "$APP" in \
-      mudclient|mudClient|MudClient) cp -a /tmp/mc.output/. /srv/app/ ;; \
-      *)                              cp -a /tmp/admin.output/. /srv/app/ ;; \
-    esac
+COPY --from=build --chown=web:nodejs /repo/app-output /srv/app
 
 USER web
 
