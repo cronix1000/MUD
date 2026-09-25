@@ -55,6 +55,13 @@ jobs:
             | sed 's/[[:space:]]*$//' \
             > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
+          # Diagnostic: byte count, first/last few bytes (hex), and any
+          # BEGIN marker — never the key itself.
+          wc -c ~/.ssh/deploy_key
+          head -c 6 ~/.ssh/deploy_key | od -An -c | head -1
+          tail -c 6 ~/.ssh/deploy_key | od -An -c | head -1
+          grep -c 'BEGIN OPENSSH PRIVATE KEY' ~/.ssh/deploy_key && echo 'has BEGIN marker' || echo 'NO BEGIN MARKER'
+          grep -c 'END OPENSSH PRIVATE KEY' ~/.ssh/deploy_key && echo 'has END marker' || echo 'NO END MARKER'
           # Validate the key before attempting to use it.
           ssh-keygen -lf ~/.ssh/deploy_key || { echo "key invalid"; exit 1; }
 
