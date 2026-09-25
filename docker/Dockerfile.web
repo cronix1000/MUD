@@ -41,7 +41,7 @@ RUN if [ "$(echo "$APP" | tr '[:upper:]' '[:lower:]')" = "mudclient" ]; then \
 # instead of relying on the per-workspace .output path.
 RUN if [ "$(echo "$APP" | tr '[:upper:]' '[:lower:]')" = "mudclient" ]; then \
       npm --workspace mudclient run build && \
-      cp -a /repo/mudclient/.output /repo/app-output; \
+      cp -a /repo/MudClient/.output /repo/app-output; \
     else \
       npm --workspace MudAdmin run build && \
       cp -a /repo/MudAdmin/.output  /repo/app-output; \
