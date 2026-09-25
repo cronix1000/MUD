@@ -38,14 +38,36 @@ jobs:
       ref: beta
   deploy:
     name: deploy to beta
-    runs-on: [self-hosted, homelab-beta]
+    runs-on: ubuntu-latest
+    environment: beta
     needs: build
     steps:
       - uses: actions/checkout@v4
         with:
           ref: beta
+
+      - name: Set up SSH key
+        uses: webfactory/ssh-agent@v0.10.0
+        with:
+          ssh_private_key: ${{ secrets.PROD_SSH_KEY }}
+
+      - name: Verify SSH key fingerprint
+        env:
+          KEY: ${{ secrets.PROD_SSH_KEY }}
+        run: |
+          printf '%s' "$KEY" | ssh-keygen -lf - 2>/dev/null || echo "ssh-keygen could not parse the secret"
+          echo "key byte length: $(printf '%s' "$KEY" | wc -c)"
+          echo "key has BEGIN marker: $(printf '%s' "$KEY" | grep -q 'BEGIN OPENSSH PRIVATE KEY' && echo yes || echo no)"
+          echo "key has END marker: $(printf '%s' "$KEY" | grep -q 'END OPENSSH PRIVATE KEY' && echo yes || echo no)"
+          echo "key line count: $(printf '%s' "$KEY" | wc -l)"
+
       - name: Deploy
-        run: bash scripts/deploy-remote.sh beta ${{ inputs.tag || 'beta' }}
+        run: |
+          ssh -o StrictHostKeyChecking=no \
+              ${{ secrets.PROD_USER }}@${{ secrets.PROD_HOST }} \
+              "bash -s -- beta ${{ inputs.tag || 'beta' }}" \
+              < scripts/deploy-remote.sh
+
       - name: Notify
         if: always()
         run: |
