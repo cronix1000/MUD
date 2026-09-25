@@ -49,6 +49,17 @@ jobs:
         with:
           ssh_private_key: ${{ secrets.PROD_SSH_KEY }}
 
+      - name: Verify SSH key fingerprint
+        env:
+          KEY: ${{ secrets.PROD_SSH_KEY }}
+        run: |
+          # Don't print the key, only its fingerprint and length.
+          printf '%s' "$KEY" | ssh-keygen -lf - 2>/dev/null || echo "ssh-keygen could not parse the secret"
+          echo "key byte length: $(printf '%s' "$KEY" | wc -c)"
+          echo "key has BEGIN marker: $(printf '%s' "$KEY" | grep -q 'BEGIN OPENSSH PRIVATE KEY' && echo yes || echo no)"
+          echo "key has END marker: $(printf '%s' "$KEY" | grep -q 'END OPENSSH PRIVATE KEY' && echo yes || echo no)"
+          echo "key line count: $(printf '%s' "$KEY" | wc -l)"
+
       - name: Deploy
         run: |
           ssh -o StrictHostKeyChecking=no \
