@@ -61,6 +61,27 @@ fi
 REGISTRY="${REGISTRY:-ghcr.io/${REPO_OWNER:-cronix1000}}"
 export TAG REGISTRY
 
+echo "[deploy] port sanity check (beta vs prod)"
+# Both profiles run on the same VPS in this repo, so BETA_*_PORT must not
+# collide with the corresponding prod host port.
+declare -a CONFLICTS=()
+check_port() {
+  local name="$1" beta_var="$2" prod_var="$3"
+  local beta_val="${!beta_var:-}" prod_val="${!prod_var:-}"
+  if [[ -n "$beta_val" && -n "$prod_val" && "$beta_val" == "$prod_val" ]]; then
+    CONFLICTS+=("$beta_var=$beta_val conflicts with $prod_var=$prod_val")
+  fi
+}
+check_port "HTTPS"  "BETA_HTTPS_PORT"  "HTTPS_PORT"
+check_port "HTTP"   "BETA_HTTP_PORT"   "HTTP_PORT"
+check_port "Gateway" "BETA_GATEWAY_PORT" "GATEWAY_PORT"
+if (( ${#CONFLICTS[@]} > 0 )); then
+  echo "[deploy] ERROR: beta/prod port collision:" >&2
+  for c in "${CONFLICTS[@]}"; do echo "  - $c" >&2; done
+  echo "[deploy] Fix .env so BETA_*_PORT differs from the prod port." >&2
+  exit 1
+fi
+
 echo "[deploy] pull images"
 TAG="$TAG" REGISTRY="$REGISTRY" docker compose $COMPOSE_FLAGS pull --ignore-pull-failures
 
