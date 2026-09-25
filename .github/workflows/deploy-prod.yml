@@ -18,6 +18,7 @@ on:
       - 'docker-compose.yml'
       - 'scripts/**'
       - '.github/workflows/deploy-prod.yml'
+      - '.github/workflows/build.yml'
       - 'package.json'
       - 'package-lock.json'
 
@@ -26,10 +27,16 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  build:
+    name: wait for build to finish
+    uses: ./.github/workflows/build.yml
+    with:
+      ref: main
   deploy:
     name: deploy to prod
     runs-on: ubuntu-latest
     environment: production
+    needs: build
     steps:
       - uses: actions/checkout@v4
 
@@ -40,7 +47,7 @@ jobs:
           username: ${{ secrets.PROD_USER }}
           key: ${{ secrets.PROD_SSH_KEY }}
           script_path: scripts/deploy-remote.sh
-          args: prod ${{ inputs.tag || 'latest' }}
+          args: prod ${{ inputs.tag || 'prod' }}
 
       - name: Notify
         if: always()

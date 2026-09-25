@@ -1,4 +1,5 @@
 name: deploy-beta
+
 on:
   workflow_dispatch:
     inputs:
@@ -6,17 +7,41 @@ on:
         description: 'Image tag to deploy (default: latest)'
         required: false
         default: 'latest'
+  push:
+    branches: [beta]
+    paths:
+      - 'ModularMudServer/**'
+      - 'MudAdmin/**'
+      - 'MudClient/**'
+      - 'mud-ws-gateway/**'
+      - 'docker/**'
+      - 'docker-compose.yml'
+      - 'scripts/**'
+      - '.github/workflows/deploy-beta.yml'
+      - '.github/workflows/build.yml'
+      - 'package.json'
+      - 'package-lock.json'
+
 concurrency:
   group: deploy-beta
   cancel-in-progress: false
+
 jobs:
+  build:
+    name: wait for build to finish
+    uses: ./.github/workflows/build.yml
+    with:
+      ref: beta
   deploy:
     name: deploy to beta
     runs-on: [self-hosted, homelab-beta]
+    needs: build
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: beta
       - name: Deploy
-        run: bash scripts/deploy-remote.sh beta ${{ inputs.tag || 'latest' }}
+        run: bash scripts/deploy-remote.sh beta ${{ inputs.tag || 'beta' }}
       - name: Notify
         if: always()
         run: |
