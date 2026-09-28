@@ -14,12 +14,22 @@ https://tower-mud.unlrealities.ca {
         }
     }
 
-    handle_path /admin* {
+    handle /admin_nuxt/* {
         reverse_proxy mud-admin:3000 {
             header_up Host {host}
             header_up X-Real-IP {remote_host}
             header_up X-Forwarded-Proto https
         }
+    }
+
+    handle /admin* {
+        reverse_proxy mud-admin:3000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-Proto https
+        }
+        header Cache-Control "no-cache, no-store, must-revalidate"
+        header X-Mud-SPA "admin"
     }
 
     handle /_nuxt/* {
@@ -36,6 +46,8 @@ https://tower-mud.unlrealities.ca {
             header_up X-Real-IP {remote_host}
             header_up X-Forwarded-Proto https
         }
+        header Cache-Control "no-cache, no-store, must-revalidate"
+        header X-Mud-SPA "client"
     }
 }
 
@@ -50,12 +62,22 @@ https://beta-tower-mud.unlrealities.ca {
         }
     }
 
-    handle_path /admin* {
+    handle /admin_nuxt/* {
         reverse_proxy mud-admin-beta:3000 {
             header_up Host {host}
             header_up X-Real-IP {remote_host}
             header_up X-Forwarded-Proto https
         }
+    }
+
+    handle /admin* {
+        reverse_proxy mud-admin-beta:3000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-Proto https
+        }
+        header Cache-Control "no-cache, no-store, must-revalidate"
+        header X-Mud-SPA "admin"
     }
 
     handle /_nuxt/* {
@@ -72,5 +94,7 @@ https://beta-tower-mud.unlrealities.ca {
             header_up X-Real-IP {remote_host}
             header_up X-Forwarded-Proto https
         }
+        header Cache-Control "no-cache, no-store, must-revalidate"
+        header X-Mud-SPA "client"
     }
 }

@@ -31,6 +31,12 @@ export default defineNuxtConfig({
   },
   nitro: {
     routeRules: {
+      '/': {
+        headers: {
+          'cache-control': 'no-cache, no-store, must-revalidate',
+          'x-mud-client-spa': '1'
+        }
+      },
       '/_nuxt/**': {
         headers: {
           'cache-control': 'public, max-age=31536000, immutable'
