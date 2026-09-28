@@ -170,9 +170,8 @@ services:
       - "8443"
 
   mud-admin-beta:
-    <<: *admin-base
     profiles: ["beta"]
-    build: ~         # image-only service; override the anchor's build.
+    build: ~         # image-only service; override any anchor's build.
     image: ${REGISTRY:-ghcr.io/cronix1000}/mud-admin:${TAG:-beta}
     container_name: mud-admin-beta
     hostname: mud-admin-beta
@@ -187,9 +186,8 @@ services:
       - "3000"
 
   mud-client-beta:
-    <<: *client-base
     profiles: ["beta"]
-    build: ~         # image-only service; override the anchor's build.
+    build: ~         # image-only service; override any anchor's build.
     image: ${REGISTRY:-ghcr.io/cronix1000}/mud-client:${TAG:-beta}
     container_name: mud-client-beta
     hostname: mud-client-beta
