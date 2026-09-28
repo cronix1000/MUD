@@ -29,4 +29,14 @@ export default defineNuxtConfig({
       title: 'MudClient',
     },
   },
+  nitro: {
+    routeRules: {
+      '/_nuxt/**': {
+        headers: {
+          'cache-control': 'public, max-age=31536000, immutable'
+        }
+      }
+    },
+    errorHandler: 'text/plain'
+  }
 })
