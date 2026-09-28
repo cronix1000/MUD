@@ -39,15 +39,22 @@ const props = withDefaults(defineProps<{
   cellSize?: number
   showCoords?: boolean
   interactive?: boolean
+  cursorX?: number
+  cursorY?: number
+  cursorActive?: boolean
 }>(), {
   spawns: () => [],
   cellSize: 28,
   showCoords: true,
   interactive: false,
+  cursorX: 0,
+  cursorY: 0,
+  cursorActive: false,
 })
 
 const emit = defineEmits<{
   'cell-click': [x: number, y: number, event: MouseEvent]
+  'cell-enter': [x: number, y: number]
 }>()
 
 const palette = computed<Map<string, PaletteEntry>>(() => {
@@ -87,7 +94,7 @@ function spawnColor(type: string): string {
 function cellStyle(ch: string): Record<string, string> {
   const p = palette.value.get(ch)
   if (!p) return { background: '#1f1f1f', color: '#a3a3a3', 'box-shadow': 'inset 0 0 0 1px #ef4444' }
-  return { background: p.css, color: p.foreground }
+  return { background: '#1a1a1a', color: p.css }
 }
 
 function titleFor(ch: string): string {
@@ -117,22 +124,33 @@ const maxCols = computed(() => props.layout.reduce((m, r) => Math.max(m, r.lengt
 
 <template>
   <div class="inline-block font-mono text-sm leading-none bg-neutral-950 p-2 rounded border border-neutral-800">
-    <div v-if="showCoords" class="flex items-center mb-1">
+    <div v-if="showCoords" class="flex items-center mb-1 gap-0.5">
       <div class="w-6 h-6 mr-1"></div>
       <div v-for="x in maxCols" :key="`col-${x}`" class="flex items-center justify-center" :style="{ width: cellSize + 'px', height: '24px' }">
-        <span class="text-neutral-500 text-xs">{{ colLabel(x - 1) }}</span>
+        <span
+          class="text-xs"
+          :class="cursorActive && x - 1 === cursorX ? 'text-emerald-300 font-bold' : 'text-neutral-500'"
+        >{{ colLabel(x - 1) }}</span>
       </div>
     </div>
-    <div v-for="(row, y) in layout" :key="y" class="flex items-center">
-      <div v-if="showCoords" class="w-6 h-6 flex items-center justify-center text-neutral-500 text-xs mr-1">{{ y + 1 }}</div>
+    <div v-for="(row, y) in layout" :key="y" class="flex items-center gap-0.5">
+      <div
+        v-if="showCoords"
+        class="w-6 h-6 flex items-center justify-center text-xs mr-1"
+        :class="cursorActive && y === cursorY ? 'text-emerald-300 font-bold' : 'text-neutral-500'"
+      >{{ y + 1 }}</div>
       <template v-for="(ch, x) in row.split('')" :key="`${y}-${x}`">
         <div
-          class="relative flex items-center justify-center"
-          :class="interactive ? 'cursor-pointer hover:ring-2 hover:ring-emerald-400' : ''"
+          class="relative flex items-center justify-center select-none"
+          :class="[
+            interactive ? 'cursor-crosshair' : '',
+            cursorActive && x === cursorX && y === cursorY ? 'ring-2 ring-emerald-400 z-10' : '',
+          ]"
           :style="{ width: cellSize + 'px', height: cellSize + 'px', ...cellStyle(ch) }"
           :title="titleFor(ch)"
           :aria-label="`${y},${x} ${ariaFor(ch)}`"
-          @click="(e) => interactive && emit('cell-click', x, y, e)"
+          @mousedown="(e) => interactive && emit('cell-click', x, y, e)"
+          @mouseenter="interactive && emit('cell-enter', x, y)"
         >
           <span class="relative z-0">{{ ch === ' ' ? '·' : ch }}</span>
           <div

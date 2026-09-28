@@ -31,7 +31,7 @@ function detectSchema(cols: ColumnInfo[]): CardSchema {
     names.find((n) => n === 'category_id') ??
     names.find((n) => n === 'id') ??
     names[0] ?? ''
-  const skip = new Set([primary, 'world_id', 'description', 'script_ref', 'extra_json', 'components_json', 'attack_patterns_json', 'dialogue_root', 'spawn_x', 'spawn_y', 'to_room_id', 'dest_x', 'dest_y', 'portal_name', 'auto_trigger', 'is_portal', 'is_one_way', 'dest_room', 'icon', 'src_room', 'color', 'char', 'block_type', 'pattern', 'layout_json'])
+  const skip = new Set([primary, 'description', 'script_ref', 'extra_json', 'components_json', 'attack_patterns_json', 'dialogue_root', 'spawn_x', 'spawn_y', 'to_room_id', 'dest_x', 'dest_y', 'portal_name', 'auto_trigger', 'is_portal', 'is_one_way', 'dest_room', 'icon', 'src_room', 'color', 'char', 'block_type', 'pattern', 'layout_json'])
   const secondary = names.filter((n) => !skip.has(n) && n !== primary).slice(0, 4)
   const hidden = names.filter((n) => n !== primary && !secondary.includes(n) && /_json$/.test(n))
   const pk = cols.find((c) => c.pk === 1)?.name

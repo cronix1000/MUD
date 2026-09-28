@@ -205,6 +205,120 @@ const MIGRATIONS: Migration[] = [
       'ALTER TABLE world.world_interactables ADD COLUMN station_type TEXT;',
     ],
   },
+  {
+    version: 16,
+    name: 'drop_world_worlds_and_world_id_columns',
+    sql: [
+      `DO $$
+       DECLARE r record;
+       BEGIN
+         FOR r IN
+           SELECT n.nspname AS schema, c.relname AS table_name, con.conname AS fk_name
+             FROM pg_constraint con
+             JOIN pg_class c ON c.oid = con.conrelid
+             JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE con.contype = 'f'
+              AND n.nspname IN ('world', 'players')
+              AND EXISTS (
+                SELECT 1 FROM unnest(con.conkey) k
+                  JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = k
+                 WHERE a.attname = 'world_id'
+              )
+         LOOP
+           EXECUTE format('ALTER TABLE %I.%I DROP CONSTRAINT %I', r.schema, r.table_name, r.fk_name);
+         END LOOP;
+       END$$;`,
+      `DO $$
+       DECLARE r record;
+       BEGIN
+         FOR r IN
+           SELECT n.nspname AS schema, c.relname AS table_name, con.conname AS pk_name
+             FROM pg_constraint con
+             JOIN pg_class c ON c.oid = con.conrelid
+             JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE con.contype = 'p'
+              AND n.nspname IN ('world', 'players')
+              AND EXISTS (
+                SELECT 1 FROM unnest(con.conkey) k
+                  JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = k
+                 WHERE a.attname = 'world_id'
+              )
+         LOOP
+           EXECUTE format('ALTER TABLE %I.%I DROP CONSTRAINT %I', r.schema, r.table_name, r.pk_name);
+         END LOOP;
+       END$$;`,
+      `DO $$
+       DECLARE r record;
+       BEGIN
+         FOR r IN
+           SELECT n.nspname AS schema, c.relname AS table_name, i.indexrelid::regclass AS idx_name
+             FROM pg_index i
+             JOIN pg_class c ON c.oid = i.indrelid
+             JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname IN ('world', 'players')
+              AND NOT i.indisprimary
+              AND NOT i.indisunique
+              AND EXISTS (
+                SELECT 1 FROM unnest(i.indkey) k
+                  JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = k
+                 WHERE a.attname = 'world_id'
+              )
+         LOOP
+           EXECUTE format('DROP INDEX IF EXISTS %I.%I', r.schema, r.idx_name);
+         END LOOP;
+       END$$;`,
+      `DO $$
+       DECLARE r record;
+       BEGIN
+         FOR r IN
+           SELECT n.nspname AS schema, c.relname AS table_name, con.conname AS uq_name
+             FROM pg_constraint con
+             JOIN pg_class c ON c.oid = con.conrelid
+             JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE con.contype = 'u'
+              AND n.nspname IN ('world', 'players')
+              AND EXISTS (
+                SELECT 1 FROM unnest(con.conkey) k
+                  JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = k
+                 WHERE a.attname = 'world_id'
+              )
+         LOOP
+           EXECUTE format('ALTER TABLE %I.%I DROP CONSTRAINT %I', r.schema, r.table_name, r.uq_name);
+         END LOOP;
+       END$$;`,
+      'DROP TABLE IF EXISTS world.world_worlds CASCADE;',
+      'ALTER TABLE world.world_regions            DROP COLUMN IF EXISTS world_id;',
+      'ALTER TABLE world.world_rooms              DROP COLUMN IF EXISTS world_id;',
+      'ALTER TABLE world.world_room_exits         DROP COLUMN IF EXISTS world_id;',
+      'ALTER TABLE world.world_room_spawns        DROP COLUMN IF EXISTS world_id;',
+      'ALTER TABLE world.world_terrains           DROP COLUMN IF EXISTS world_id;',
+      'ALTER TABLE world.world_items              DROP COLUMN IF EXISTS world_id;',
+      'ALTER TABLE world.world_mobs               DROP COLUMN IF EXISTS world_id;',
+      'ALTER TABLE world.world_interactables      DROP COLUMN IF EXISTS world_id;',
+      'ALTER TABLE world.world_loot_tables        DROP COLUMN IF EXISTS world_id;',
+      'ALTER TABLE world.world_skill_categories   DROP COLUMN IF EXISTS world_id;',
+      'ALTER TABLE world.world_skills             DROP COLUMN IF EXISTS world_id;',
+      'ALTER TABLE world.world_dialogues          DROP COLUMN IF EXISTS world_id;',
+      'ALTER TABLE world.world_quests             DROP COLUMN IF EXISTS world_id;',
+      'ALTER TABLE world.world_quest_objectives   DROP COLUMN IF EXISTS world_id;',
+      'ALTER TABLE world.world_quest_rewards      DROP COLUMN IF EXISTS world_id;',
+      'ALTER TABLE world.world_recipes            DROP COLUMN IF EXISTS world_id;',
+      'ALTER TABLE world.world_region_overrides   DROP COLUMN IF EXISTS world_id;',
+      'ALTER TABLE world.world_field_definitions  DROP COLUMN IF EXISTS world_id;',
+      'ALTER TABLE players.player_known_recipes   DROP COLUMN IF EXISTS world_id;',
+    ],
+  },
+  {
+    version: 17,
+    name: 'add_floor_columns_and_palette_to_world_regions',
+    sql: [
+      'ALTER TABLE world.world_regions ADD COLUMN IF NOT EXISTS floor_tribe TEXT;',
+      'ALTER TABLE world.world_regions ADD COLUMN IF NOT EXISTS floor_index INT;',
+      'ALTER TABLE world.world_regions ADD COLUMN IF NOT EXISTS floor_meta  INT;',
+      'ALTER TABLE world.world_regions ADD COLUMN IF NOT EXISTS biome_theme TEXT;',
+      'ALTER TABLE world.world_regions ADD COLUMN IF NOT EXISTS floor_palette_json TEXT;',
+    ],
+  },
 ]
 
 export function ensureSchemas(): Promise<void> {

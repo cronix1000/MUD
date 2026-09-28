@@ -8,143 +8,147 @@ export interface CompositeKeySpec {
 
 export const COMPOSITE_KEYS: Record<string, CompositeKeySpec> = {
   world_rooms: {
-    fields: ['world_id', 'region_id', 'room_id'],
-    encode: (r) => `${r.world_id}::${r.region_id}::${r.room_id}`,
+    fields: ['region_id', 'room_id'],
+    encode: (r) => `${r.region_id}::${r.room_id}`,
     decode: (raw) => {
-      const [world_id, region_id, room_id] = decodeURIComponent(raw).split('::')
-      if (!world_id || !region_id || !room_id) {
+      const [region_id, room_id] = decodeURIComponent(raw).split('::')
+      if (!region_id || !room_id) {
         throw createError({ statusCode: 400, statusMessage: `Invalid composite key: ${raw}` })
       }
       const n = Number(room_id)
       if (!Number.isInteger(n)) {
         throw createError({ statusCode: 400, statusMessage: `Invalid room_id: ${room_id}` })
       }
-      return { world_id, region_id, room_id: n }
+      return { region_id, room_id: n }
     },
   },
   world_mobs: {
-    fields: ['world_id', 'template_id'],
-    encode: (r) => `${r.world_id}::${r.template_id}`,
+    fields: ['template_id'],
+    encode: (r) => `${r.template_id}`,
     decode: (raw) => {
-      const [world_id, template_id] = decodeURIComponent(raw).split('::')
-      if (!world_id || !template_id) {
+      const template_id = decodeURIComponent(raw)
+      if (!template_id) {
         throw createError({ statusCode: 400, statusMessage: `Invalid composite key: ${raw}` })
       }
-      return { world_id, template_id }
+      return { template_id }
     },
   },
   world_items: {
-    fields: ['world_id', 'template_id'],
-    encode: (r) => `${r.world_id}::${r.template_id}`,
+    fields: ['template_id'],
+    encode: (r) => `${r.template_id}`,
     decode: (raw) => {
-      const [world_id, template_id] = decodeURIComponent(raw).split('::')
-      if (!world_id || !template_id) {
+      const template_id = decodeURIComponent(raw)
+      if (!template_id) {
         throw createError({ statusCode: 400, statusMessage: `Invalid composite key: ${raw}` })
       }
-      return { world_id, template_id }
+      return { template_id }
     },
   },
   world_interactables: {
-    fields: ['world_id', 'template_id'],
-    encode: (r) => `${r.world_id}::${r.template_id}`,
+    fields: ['template_id'],
+    encode: (r) => `${r.template_id}`,
     decode: (raw) => {
-      const [world_id, template_id] = decodeURIComponent(raw).split('::')
-      if (!world_id || !template_id) {
+      const template_id = decodeURIComponent(raw)
+      if (!template_id) {
         throw createError({ statusCode: 400, statusMessage: `Invalid composite key: ${raw}` })
       }
-      return { world_id, template_id }
+      return { template_id }
     },
   },
   world_terrains: {
-    fields: ['world_id', 'symbol'],
-    encode: (r) => `${r.world_id}::${r.symbol}`,
+    fields: ['symbol'],
+    encode: (r) => `${r.symbol}`,
     decode: (raw) => {
-      const [world_id, symbol] = decodeURIComponent(raw).split('::')
-      if (!world_id || symbol === undefined) {
+      const symbol = decodeURIComponent(raw)
+      if (symbol === undefined) {
         throw createError({ statusCode: 400, statusMessage: `Invalid composite key: ${raw}` })
       }
-      return { world_id, symbol }
+      return { symbol }
     },
   },
   world_loot_tables: {
-    fields: ['world_id', 'table_id'],
-    encode: (r) => `${r.world_id}::${r.table_id}`,
+    fields: ['table_id'],
+    encode: (r) => `${r.table_id}`,
     decode: (raw) => {
-      const [world_id, table_id] = decodeURIComponent(raw).split('::')
-      if (!world_id || !table_id) {
+      const table_id = decodeURIComponent(raw)
+      if (!table_id) {
         throw createError({ statusCode: 400, statusMessage: `Invalid composite key: ${raw}` })
       }
-      return { world_id, table_id }
+      return { table_id }
     },
   },
   world_dialogues: {
-    fields: ['world_id', 'node_id'],
-    encode: (r) => `${r.world_id}::${r.node_id}`,
+    fields: ['node_id'],
+    encode: (r) => `${r.node_id}`,
     decode: (raw) => {
-      const [world_id, node_id] = decodeURIComponent(raw).split('::')
-      if (!world_id || !node_id) {
+      const node_id = decodeURIComponent(raw)
+      if (!node_id) {
         throw createError({ statusCode: 400, statusMessage: `Invalid composite key: ${raw}` })
       }
-      return { world_id, node_id }
+      return { node_id }
     },
   },
   world_quests: {
-    fields: ['world_id', 'quest_id'],
-    encode: (r) => `${r.world_id}::${r.quest_id}`,
+    fields: ['quest_id'],
+    encode: (r) => `${r.quest_id}`,
     decode: (raw) => {
-      const [world_id, quest_id] = decodeURIComponent(raw).split('::')
-      if (!world_id || !quest_id) {
+      const quest_id = decodeURIComponent(raw)
+      if (!quest_id) {
         throw createError({ statusCode: 400, statusMessage: `Invalid composite key: ${raw}` })
       }
-      return { world_id, quest_id }
+      return { quest_id }
     },
   },
   world_quest_objectives: {
-    fields: ['world_id', 'quest_id', 'ordinal'],
-    encode: (r) => `${r.world_id}::${r.quest_id}::${r.ordinal}`,
+    fields: ['quest_id', 'ordinal'],
+    encode: (r) => `${r.quest_id}::${r.ordinal}`,
     decode: (raw) => {
-      const [world_id, quest_id, ordinal] = decodeURIComponent(raw).split('::')
-      if (!world_id || !quest_id || ordinal === undefined) {
+      const [quest_id, ordinal] = decodeURIComponent(raw).split('::')
+      if (!quest_id || ordinal === undefined) {
         throw createError({ statusCode: 400, statusMessage: `Invalid composite key: ${raw}` })
       }
       const n = Number(ordinal)
       if (!Number.isInteger(n)) {
         throw createError({ statusCode: 400, statusMessage: `Invalid ordinal: ${ordinal}` })
       }
-      return { world_id, quest_id, ordinal: n }
+      return { quest_id, ordinal: n }
     },
   },
   world_quest_rewards: {
-    fields: ['world_id', 'quest_id', 'ordinal'],
-    encode: (r) => `${r.world_id}::${r.quest_id}::${r.ordinal}`,
+    fields: ['quest_id', 'ordinal'],
+    encode: (r) => `${r.quest_id}::${r.ordinal}`,
     decode: (raw) => {
-      const [world_id, quest_id, ordinal] = decodeURIComponent(raw).split('::')
-      if (!world_id || !quest_id || ordinal === undefined) {
+      const [quest_id, ordinal] = decodeURIComponent(raw).split('::')
+      if (!quest_id || ordinal === undefined) {
         throw createError({ statusCode: 400, statusMessage: `Invalid composite key: ${raw}` })
       }
       const n = Number(ordinal)
       if (!Number.isInteger(n)) {
         throw createError({ statusCode: 400, statusMessage: `Invalid ordinal: ${ordinal}` })
       }
-      return { world_id, quest_id, ordinal: n }
+      return { quest_id, ordinal: n }
     },
   },
   world_recipes: {
-    fields: ['world_id', 'recipe_id'],
-    encode: (r) => `${r.world_id}::${r.recipe_id}`,
+    fields: ['recipe_id'],
+    encode: (r) => `${r.recipe_id}`,
     decode: (raw) => {
-      const [world_id, recipe_id] = decodeURIComponent(raw).split('::')
-      if (!world_id || !recipe_id) throw new Error(`Invalid composite key: ${raw}`)
-      return { world_id, recipe_id }
+      const recipe_id = decodeURIComponent(raw)
+      if (!recipe_id) {
+        throw createError({ statusCode: 400, statusMessage: `Invalid composite key: ${raw}` })
+      }
+      return { recipe_id }
     },
   },
   world_regions: {
-    fields: ['world_id', 'id'],
-    encode: (r) => `${r.world_id}::${r.id}`,
+    fields: ['id'],
+    encode: (r) => `${r.id}`,
     decode: (raw) => {
-      const [world_id, id] = decodeURIComponent(raw).split('::')
-      if (!world_id || !id) throw new Error(`Invalid composite key: ${raw}`)
-      return { world_id, id }
+      const id = decodeURIComponent(raw)
+      if (!id) {
+        throw createError({ statusCode: 400, statusMessage: `Invalid composite key: ${raw}` })
+      }
+      return { id }
     },
   },
 }

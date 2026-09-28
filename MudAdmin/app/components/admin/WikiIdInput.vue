@@ -4,7 +4,6 @@ import type { EntityType } from '~/utils/wikiParser'
 
 const props = defineProps<{
   modelValue: string
-  worldId?: string
   placeholder?: string
 }>()
 
@@ -38,7 +37,7 @@ async function fetchResults(types: EntityType[], q: string) {
     pickerResults.value = []
     return
   }
-  const fetchKey = `${types.join(',')}|${q}|${props.worldId}`
+  const fetchKey = `${types.join(',')}|${q}`
   if (fetchKey === lastFetchKey) return
   lastFetchKey = fetchKey
   fetching.value = true
@@ -46,7 +45,6 @@ async function fetchResults(types: EntityType[], q: string) {
     const url = new URL('/api/search/entities', window.location.origin)
     url.searchParams.set('type', types[0]!)
     if (q) url.searchParams.set('q', q)
-    if (props.worldId) url.searchParams.set('world_id', props.worldId)
     const res = await $fetch<{ results: SearchResult[] }>(url.pathname + url.search)
     pickerResults.value = res.results
     pickerIndex.value = 0

@@ -51,7 +51,6 @@ const props = defineProps<{
 const emit = defineEmits<{ close: [] }>()
 
 interface RoomRow {
-  world_id: string
   region_id: string
   room_id: number
   name: string
@@ -69,9 +68,8 @@ interface RoomRow {
 interface ColumnInfo { name: string; type: string; pk: number; dflt_value: unknown; notnull: number }
 
 const split = computed(() => decodeURIComponent(props.compositeKey).split('::'))
-const worldId = computed(() => split.value[0] ?? '')
-const regionId = computed(() => split.value[1] ?? '')
-const roomId = computed(() => Number(split.value[2] ?? 0))
+const regionId = computed(() => split.value[0] ?? '')
+const roomId = computed(() => Number(split.value[1] ?? 0))
 
 const { data: roomData, refresh: refreshRoom } = await useFetch<{ columns: ColumnInfo[]; rows: Record<string, unknown>[] }>(
   () => `/api/tables/world_rooms`,
@@ -88,15 +86,13 @@ const room = computed<RoomRow | undefined>(() => {
   const rows = roomData.value?.rows ?? []
   return rows.find(
     (r) =>
-      String(r.world_id) === worldId.value &&
       String(r.region_id) === regionId.value &&
       Number(r.room_id) === roomId.value,
   ) as RoomRow | undefined
 })
 
 const terrainsInWorld = computed<TerrainRow[]>(() => {
-  const all = terrainsData.value?.rows ?? []
-  return all.filter((t) => t.world_id === worldId.value)
+  return terrainsData.value?.rows ?? []
 })
 
 const palette = computed(() => {
@@ -154,11 +150,52 @@ const layoutText = computed({
   },
 })
 
+function padRow(row: string, width: number): string {
+  if (row.length === width) return row
+  if (row.length > width) return row.slice(0, width)
+  return row + '.'.repeat(width - row.length)
+}
+
 function ensureLayoutSize() {
-  while (draft.layout.length > draft.height) draft.layout.pop()
+  const w = Math.max(0, Math.floor(draft.width ?? 0))
+  const h = Math.max(0, Math.floor(draft.height ?? 0))
+  if (h === 0 && draft.layout.length > 0) {
+    draft.layout = draft.layout.map((r) => padRow(r, w))
+    return
+  }
+  if (draft.layout.length > h) {
+    draft.layout = draft.layout.slice(0, h)
+  } else {
+    while (draft.layout.length < h) {
+      draft.layout.push('.'.repeat(w))
+    }
+  }
+  draft.layout = draft.layout.map((r) => padRow(r, w))
 }
 
 watch(() => draft.height, ensureLayoutSize)
+watch(() => draft.width, ensureLayoutSize)
+
+function extendDown(by = 1) {
+  const w = Math.max(0, Math.floor(draft.width ?? 0))
+  const fill = draft.terrain && draft.terrain !== ' ' ? draft.terrain.repeat(w) : '.'.repeat(w)
+  for (let i = 0; i < by; i++) draft.layout.push(fill)
+  draft.height = draft.layout.length
+}
+
+function fillAll() {
+  const w = Math.max(0, Math.floor(draft.width ?? 0))
+  const ch = draft.terrain && draft.terrain !== ' ' ? draft.terrain : '.'
+  draft.layout = Array.from({ length: Math.max(draft.layout.length, draft.height) }, () => ch.repeat(w))
+}
+
+function onIdentityEnter(field: 'width' | 'height') {
+  if (field === 'height') {
+    draft.height = (draft.height ?? 0) + 1
+  } else {
+    extendDown(1)
+  }
+}
 
 const exits = ref<ExitRow[]>([])
 watchEffect(() => {
@@ -166,7 +203,6 @@ watchEffect(() => {
   exits.value = (exitsData.value.rows as Array<Record<string, unknown>>)
     .filter(
       (e) =>
-        String(e.world_id) === worldId.value &&
         String(e.region_id) === regionId.value &&
         Number(e.from_room_id) === roomId.value,
     )
@@ -202,7 +238,7 @@ function addExit() {
 function syncExitTargetRooms() {
   for (const e of exits.value) {
     if (e._targetRoomInput === undefined) continue
-    const resolved = resolveWikiId(e._targetRoomInput, worldId.value)
+    const resolved = resolveWikiId(e._targetRoomInput)
     const n = Number(resolved)
     if (Number.isInteger(n) && n >= 0) e.target_room = n
   }
@@ -216,7 +252,7 @@ function removeExit(idx: number) {
 }
 
 const { data: graphData } = await useFetch<{ rooms: GraphRoom[]; exits: GraphExit[] }>(
-  () => `/api/rooms/graph?world_id=${encodeURIComponent(worldId.value)}&region_id=${encodeURIComponent(regionId.value)}`,
+  () => `/api/rooms/graph?region_id=${encodeURIComponent(regionId.value)}`,
 )
 
 const MAP_NODE_W = 110
@@ -273,7 +309,6 @@ watchEffect(() => {
   spawns.value = (spawnsData.value.rows as Array<Record<string, unknown>>)
     .filter(
       (s) =>
-        String(s.world_id) === worldId.value &&
         String(s.region_id) === regionId.value &&
         Number(s.room_id) === roomId.value,
     )
@@ -322,7 +357,7 @@ async function save() {
   success.value = null
   try {
     syncExitTargetRooms()
-    const key = `${room.value.world_id}::${room.value.region_id}::${room.value.room_id}`
+    const key = `${room.value.region_id}::${room.value.room_id}`
     await $fetch(`/api/tables/world_rooms/${encodeURIComponent(key)}`, {
       method: 'PUT',
       body: {
@@ -348,7 +383,6 @@ async function save() {
       await $fetch(`/api/tables/world_room_exits`, {
         method: 'POST',
         body: {
-          world_id: worldId.value,
           region_id: regionId.value,
           from_room_id: roomId.value,
           direction: e.direction,
@@ -388,13 +422,12 @@ async function save() {
       await $fetch(`/api/tables/world_room_spawns`, {
         method: 'POST',
         body: {
-          world_id: worldId.value,
           region_id: regionId.value,
           room_id: roomId.value,
           x: s.x,
           y: s.y,
           type: s.type,
-          template_id: resolveWikiId(s.template_id, worldId.value),
+          template_id: resolveWikiId(s.template_id),
           respawn_time: s.respawn_time,
           is_respawning: s.is_respawning ? 1 : 0,
           override_json: s.override_json || null,
@@ -409,7 +442,7 @@ async function save() {
           x: s.x,
           y: s.y,
           type: s.type,
-          template_id: resolveWikiId(s.template_id, worldId.value),
+          template_id: resolveWikiId(s.template_id),
           respawn_time: s.respawn_time,
           is_respawning: s.is_respawning ? 1 : 0,
           override_json: s.override_json || null,
@@ -435,17 +468,6 @@ const unrecognizedInLayout = computed(() => {
   for (const row of draft.layout) for (const c of row) if (c !== ' ') used.add(c)
   return [...used].filter((c) => !recognizedSymbols.value.has(c))
 })
-
-const actualRowWidth = computed(() => draft.layout.reduce((m, r) => Math.max(m, r.length), 0))
-const widthMismatch = computed(() => draft.layout.length > 0 && actualRowWidth.value !== draft.width)
-const rowCountMismatch = computed(() => draft.layout.length !== draft.height)
-
-function fixWidth() {
-  draft.width = actualRowWidth.value
-}
-function fixHeight() {
-  draft.height = draft.layout.length
-}
 </script>
 
 <template>
@@ -455,7 +477,7 @@ function fixHeight() {
       <div class="flex items-center gap-3">
         <button class="text-sky-400 hover:underline text-sm" @click="emit('close')">← back</button>
         <h2 class="text-xl font-semibold font-mono">#{{ room.room_id }} {{ room.name }}</h2>
-        <span class="text-neutral-500 text-sm">{{ worldId }} / {{ regionId }}</span>
+        <span class="text-neutral-500 text-sm">{{ regionId }}</span>
       </div>
       <button class="px-3 py-1.5 rounded bg-emerald-700 hover:bg-emerald-600 text-sm disabled:opacity-50" :disabled="saving" @click="save">
         {{ saving ? 'Saving…' : 'Save all' }}
@@ -477,7 +499,7 @@ function fixHeight() {
         <input v-model="draft.name" class="w-full bg-neutral-950 border border-neutral-700 rounded px-2 py-1" />
       </div>
       <div>
-        <AdminWikiText v-model="draft.description" :world-id="worldId" :rows="4" />
+        <AdminWikiText v-model="draft.description" :rows="4" />
       </div>
       <div class="grid grid-cols-3 gap-3">
         <div>
@@ -489,11 +511,23 @@ function fixHeight() {
         </div>
         <div>
           <label class="block text-sm text-neutral-400 mb-1">width</label>
-          <input v-model.number="draft.width" type="number" min="0" class="w-full bg-neutral-950 border border-neutral-700 rounded px-2 py-1" />
+          <input
+            v-model.number="draft.width"
+            type="number"
+            min="0"
+            class="w-full bg-neutral-950 border border-neutral-700 rounded px-2 py-1"
+            @keydown.enter.prevent="extendDown(1)"
+          />
         </div>
         <div>
           <label class="block text-sm text-neutral-400 mb-1">height</label>
-          <input v-model.number="draft.height" type="number" min="0" class="w-full bg-neutral-950 border border-neutral-700 rounded px-2 py-1" />
+          <input
+            v-model.number="draft.height"
+            type="number"
+            min="0"
+            class="w-full bg-neutral-950 border border-neutral-700 rounded px-2 py-1"
+            @keydown.enter.prevent="onIdentityEnter('height')"
+          />
         </div>
       </div>
       <div class="grid grid-cols-2 gap-3">
@@ -509,23 +543,30 @@ function fixHeight() {
     </div>
 
     <div v-if="tab==='layout'" class="space-y-4">
-      <div v-if="widthMismatch || rowCountMismatch" class="bg-amber-900/30 border border-amber-700 rounded p-3 text-sm flex items-center gap-3">
-        <span class="text-amber-200">
-          <template v-if="widthMismatch">Row width ({{ actualRowWidth }}) ≠ room width ({{ draft.width }}).</template>
-          <template v-if="widthMismatch && rowCountMismatch"> · </template>
-          <template v-if="rowCountMismatch">Row count ({{ draft.layout.length }}) ≠ room height ({{ draft.height }}).</template>
-        </span>
-        <button v-if="widthMismatch" class="px-2 py-0.5 text-xs bg-amber-700 hover:bg-amber-600 rounded" @click="fixWidth">
-          resize width → {{ actualRowWidth }}
-        </button>
-        <button v-if="rowCountMismatch" class="px-2 py-0.5 text-xs bg-amber-700 hover:bg-amber-600 rounded" @click="fixHeight">
-          resize height → {{ draft.layout.length }}
-        </button>
-      </div>
       <div class="bg-neutral-900 border border-neutral-800 rounded p-4 space-y-3">
         <div class="flex items-center justify-between">
           <h3 class="text-sm font-semibold">Layout editor</h3>
           <div class="text-xs text-neutral-400">Width × Height = {{ draft.width }}×{{ draft.height }}. Each char = one tile. Spaces = void.</div>
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <button
+            class="text-xs px-2 py-1 rounded bg-neutral-800 hover:bg-neutral-700"
+            :disabled="!draft.layout.length"
+            @click="extendDown(1)"
+            title="Add one row to the bottom (Enter in width/height does the same)"
+          >+ row</button>
+          <button
+            class="text-xs px-2 py-1 rounded bg-neutral-800 hover:bg-neutral-700"
+            :disabled="!draft.layout.length || !draft.terrain"
+            :title="draft.terrain ? `Replace every cell with '${draft.terrain}'` : 'Pick a default terrain first'"
+            @click="fillAll"
+          >fill all with "{{ draft.terrain || '·' }}"</button>
+          <span class="text-xs text-neutral-500">·</span>
+          <NuxtLink
+            to="/admin/world/terrains"
+            class="text-xs text-sky-400 hover:underline"
+            title="Add or edit tiles"
+          >+ add tile to palette ↗</NuxtLink>
         </div>
         <AdminLayoutPainter
           :layout="draft.layout"
@@ -548,7 +589,7 @@ function fixHeight() {
           {{ neighborInfo.outgoing.length }} exits out · {{ neighborInfo.incoming.length }} entries in · {{ currentSpawns.length }} spawns · {{ mapLayout.length }} rooms in region.
         </div>
         <a
-          :href="`/admin/world/regions/${encodeURIComponent(worldId + '::' + regionId)}/map`"
+          :href="`/admin/world/regions/${encodeURIComponent(regionId)}/map`"
           target="_blank"
           class="text-sky-400 hover:underline text-sm"
         >
@@ -585,7 +626,7 @@ function fixHeight() {
             <template v-for="n in mapLayout" :key="n.room.room_id">
               <NuxtLink
                 v-if="n.room.room_id !== roomId"
-                :to="`/admin/world_rooms/${encodeURIComponent(encodeCompositeKey('world_rooms', { world_id: n.room.world_id, region_id: n.room.region_id, room_id: n.room.room_id } as Record<string, unknown>))}`"
+                :to="`/admin/world_rooms/${encodeURIComponent(encodeCompositeKey('world_rooms', { region_id: n.room.region_id, room_id: n.room.room_id } as Record<string, unknown>))}`"
               >
                 <rect
                   :x="mapViewBox.ox + n.x * MAP_NODE_W + 3"
@@ -730,7 +771,7 @@ function fixHeight() {
               </select>
             </td>
             <td class="px-2 py-1">
-              <AdminWikiIdInput v-model="e._targetRoomInput" :world-id="worldId" placeholder="target room" />
+              <AdminWikiIdInput v-model="e._targetRoomInput" placeholder="target room" />
             </td>
             <td class="px-2 py-1"><input v-model.number="e.dest_x" type="number" class="w-16 bg-neutral-950 border border-neutral-700 rounded px-1 py-0.5 font-mono" /></td>
             <td class="px-2 py-1"><input v-model.number="e.dest_y" type="number" class="w-16 bg-neutral-950 border border-neutral-700 rounded px-1 py-0.5 font-mono" /></td>
@@ -775,7 +816,7 @@ function fixHeight() {
               </select>
             </td>
             <td class="px-2 py-1">
-              <AdminWikiIdInput v-model="s.template_id" :world-id="worldId" :placeholder="s.type === 'mob' || s.type === 'npc' ? 'mob or npc name' : 'template_id'" />
+              <AdminWikiIdInput v-model="s.template_id" :placeholder="s.type === 'mob' || s.type === 'npc' ? 'mob or npc name' : 'template_id'" />
             </td>
             <td class="px-2 py-1"><input v-model.number="s.respawn_time" type="number" step="0.5" class="w-20 bg-neutral-950 border border-neutral-700 rounded px-1 py-0.5 font-mono" /></td>
             <td class="px-2 py-1"><input type="checkbox" v-model="s.is_respawning" /></td>

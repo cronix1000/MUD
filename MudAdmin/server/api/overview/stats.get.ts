@@ -8,7 +8,6 @@ export default defineEventHandler(async () => {
   }
 
   return {
-    worlds: await count(`select count(*) as c from world.world_worlds`),
     regions: await count(`select count(*) as c from world.world_regions`),
     regions_static: await count(`select count(*) as c from world.world_regions where region_kind = 'static' or region_kind is null`),
     regions_instanced: await count(`select count(*) as c from world.world_regions where region_kind = 'instanced'`),

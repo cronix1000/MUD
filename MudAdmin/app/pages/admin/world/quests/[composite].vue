@@ -5,21 +5,19 @@ definePageMeta({ layout: 'admin' })
 
 const route = useRoute()
 const compositeKey = computed(() => decodeURIComponent(String(route.params.composite)))
-const split = computed(() => compositeKey.value.split('::'))
-const worldId = computed(() => split.value[0] ?? '')
-const questId = computed(() => split.value[1] ?? '')
+const questId = computed(() => compositeKey.value)
 
-const { data, refresh } = await useFetch<{ rows: Array<{ world_id: string; quest_id: string; name: string; description: string | null; script_ref: string | null }> }>(
+const { data, refresh } = await useFetch<{ rows: Array<{ quest_id: string; name: string; description: string | null; script_ref: string | null }> }>(
   `/api/tables/world_quests`,
 )
-const { data: objectivesData, refresh: refreshObjectives } = await useFetch<{ rows: Array<{ world_id: string; quest_id: string; ordinal: number; kind: string; target: string | null; count: number }> }>(
+const { data: objectivesData, refresh: refreshObjectives } = await useFetch<{ rows: Array<{ quest_id: string; ordinal: number; kind: string; target: string | null; count: number }> }>(
   `/api/tables/world_quest_objectives`,
 )
-const { data: rewardsData, refresh: refreshRewards } = await useFetch<{ rows: Array<{ world_id: string; quest_id: string; ordinal: number; kind: string; payload_json: string | null }> }>(
+const { data: rewardsData, refresh: refreshRewards } = await useFetch<{ rows: Array<{ quest_id: string; ordinal: number; kind: string; payload_json: string | null }> }>(
   `/api/tables/world_quest_rewards`,
 )
 
-const quest = computed(() => (data.value?.rows ?? []).find((q) => q.world_id === worldId.value && q.quest_id === questId.value))
+const quest = computed(() => (data.value?.rows ?? []).find((q) => q.quest_id === questId.value))
 
 const draft = reactive({
   name: '',
@@ -38,7 +36,7 @@ const objectives = ref<Array<{ ordinal: number; kind: string; target: string; co
 watchEffect(() => {
   if (!objectivesData.value) return
   objectives.value = (objectivesData.value.rows as Array<Record<string, unknown>>)
-    .filter((r) => r.world_id === worldId.value && r.quest_id === questId.value)
+    .filter((r) => r.quest_id === questId.value)
     .sort((a, b) => Number(a.ordinal) - Number(b.ordinal))
     .map((r) => ({
       ordinal: Number(r.ordinal),
@@ -52,7 +50,7 @@ const rewards = ref<Array<{ ordinal: number; kind: string; payload_json: string;
 watchEffect(() => {
   if (!rewardsData.value) return
   rewards.value = (rewardsData.value.rows as Array<Record<string, unknown>>)
-    .filter((r) => r.world_id === worldId.value && r.quest_id === questId.value)
+    .filter((r) => r.quest_id === questId.value)
     .sort((a, b) => Number(a.ordinal) - Number(b.ordinal))
     .map((r) => ({
       ordinal: Number(r.ordinal),
@@ -94,7 +92,7 @@ async function save() {
   saving.value = true
   error.value = null
   try {
-    const key = `${worldId.value}::${questId.value}`
+    const key = `${questId.value}`
     await $fetch(`/api/tables/world_quests/${encodeURIComponent(key)}`, {
       method: 'PUT',
       body: {
@@ -105,14 +103,13 @@ async function save() {
     })
 
     for (const o of objectives.value.filter((x) => x._deleted)) {
-      const id = `${worldId.value}::${questId.value}::${o.ordinal}`
+      const id = `${questId.value}::${o.ordinal}`
       await $fetch(`/api/tables/world_quest_objectives/${encodeURIComponent(id)}`, { method: 'DELETE' })
     }
     for (const o of objectives.value.filter((x) => !x._deleted && x._isNew)) {
       await $fetch(`/api/tables/world_quest_objectives`, {
         method: 'POST',
         body: {
-          world_id: worldId.value,
           quest_id: questId.value,
           ordinal: o.ordinal,
           kind: o.kind,
@@ -122,7 +119,7 @@ async function save() {
       })
     }
     for (const o of objectives.value.filter((x) => !x._deleted && !x._isNew)) {
-      const id = `${worldId.value}::${questId.value}::${o.ordinal}`
+      const id = `${questId.value}::${o.ordinal}`
       await $fetch(`/api/tables/world_quest_objectives/${encodeURIComponent(id)}`, {
         method: 'PUT',
         body: { kind: o.kind, target: o.target, count: o.count },
@@ -130,14 +127,13 @@ async function save() {
     }
 
     for (const r of rewards.value.filter((x) => x._deleted)) {
-      const id = `${worldId.value}::${questId.value}::${r.ordinal}`
+      const id = `${questId.value}::${r.ordinal}`
       await $fetch(`/api/tables/world_quest_rewards/${encodeURIComponent(id)}`, { method: 'DELETE' })
     }
     for (const r of rewards.value.filter((x) => !x._deleted && x._isNew)) {
       await $fetch(`/api/tables/world_quest_rewards`, {
         method: 'POST',
         body: {
-          world_id: worldId.value,
           quest_id: questId.value,
           ordinal: r.ordinal,
           kind: r.kind,
@@ -146,7 +142,7 @@ async function save() {
       })
     }
     for (const r of rewards.value.filter((x) => !x._deleted && !x._isNew)) {
-      const id = `${worldId.value}::${questId.value}::${r.ordinal}`
+      const id = `${questId.value}::${r.ordinal}`
       await $fetch(`/api/tables/world_quest_rewards/${encodeURIComponent(id)}`, {
         method: 'PUT',
         body: { kind: r.kind, payload_json: r.payload_json || null },

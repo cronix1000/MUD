@@ -15,8 +15,8 @@ function scriptsRoot(): string {
 
 export default defineEventHandler(async (event) => {
   const composite = decodeURIComponent(getRouterParam(event, 'composite') ?? '')
-  const [world_id, region_id] = composite.split('::')
-  if (!world_id || !region_id) {
+  const region_id = composite
+  if (!region_id) {
     throw createError({ statusCode: 400, statusMessage: 'Invalid region key' })
   }
 
@@ -30,8 +30,8 @@ export default defineEventHandler(async (event) => {
   }>(
     `select id, name, region_kind, generator_script, template_config_json, tutorial_steps_json
        from world.world_regions
-      where world_id = $1 and id = $2`,
-    [world_id, region_id],
+      where id = $1`,
+    [region_id],
   )
   const region = res.rows[0]
 
@@ -70,7 +70,6 @@ export default defineEventHandler(async (event) => {
 
   return {
     region: {
-      world_id,
       id: region.id,
       name: region.name,
       region_kind: region.region_kind ?? 'static',

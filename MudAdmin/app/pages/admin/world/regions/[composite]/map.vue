@@ -4,7 +4,6 @@ import { encodeCompositeKey } from '~/utils/composite-key'
 definePageMeta({ layout: 'admin' })
 
 interface Room {
-  world_id: string
   region_id: string
   room_id: number
   name: string
@@ -17,7 +16,6 @@ interface Room {
 
 interface Exit {
   id: number
-  world_id: string
   region_id: string
   from_room_id: number
   direction: string
@@ -29,12 +27,10 @@ interface Exit {
 
 const route = useRoute()
 const compositeKey = computed(() => decodeURIComponent(String(route.params.composite)))
-const split = computed(() => compositeKey.value.split('::'))
-const world_id = computed(() => split.value[0] ?? '')
-const region_id = computed(() => split.value[1] ?? '')
+const region_id = computed(() => compositeKey.value)
 
 const { data, refresh } = await useFetch<{ rooms: Room[]; exits: Exit[] }>(
-  () => `/api/rooms/graph?world_id=${encodeURIComponent(world_id.value)}&region_id=${encodeURIComponent(region_id.value)}`,
+  () => `/api/rooms/graph?region_id=${encodeURIComponent(region_id.value)}`,
 )
 
 interface NodePos {
@@ -168,7 +164,7 @@ function downloadSvg() {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `${world_id}-${region_id}-map.svg`
+  a.download = `${region_id}-map.svg`
   a.click()
   URL.revokeObjectURL(url)
 }
