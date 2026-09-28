@@ -30,7 +30,14 @@ The C++ server (`ModularMudServer`) is intentionally **excluded from npm workspa
 | Deploy prod stack | `TAG=prod REGISTRY=ghcr.io/cronix1000 docker compose --profile prod --profile beta up -d` |
 | Deploy beta stack | `TAG=beta REGISTRY=ghcr.io/cronix1000 docker compose --profile prod --profile beta up -d` |
 
-Both deploy commands bring up **both** profiles because the prod Caddy is the sole HTTPS terminator on host `:443`/`:80` and serves both `tower-mud.unlrealities.ca` and `beta-tower-mud.unlrealities.ca` (see `docker/Caddyfile`). There is no `caddy-beta`; beta app containers reach the host Caddy through the shared `mud-net-beta` network.
+Both deploy commands bring up **both** profiles because the prod Caddy is the sole HTTPS terminator on host `:443`/`:80`. It serves four hostnames (see `docker/Caddyfile`):
+
+- `tower-mud.unlrealities.ca`        → prod `MudClient`
+- `tower-admin.unlrealities.ca`      → prod `MudAdmin`
+- `beta-tower-mud.unlrealities.ca`   → beta `MudClient`
+- `beta-tower-admin.unlrealities.ca` → beta `MudAdmin`
+
+Each app sits at the root of its own origin — no URL prefix, no `baseURL`, no `buildAssetsDir` hack. There is no `caddy-beta`; beta app containers reach the host Caddy through the shared `mud-net-beta` network. Add the two admin hostnames as DNS A/AAAA records pointing at the VPS.
 
 `MudAdmin` has no `typecheck` script — its `npm run build` is the canonical compile + typecheck gate. Run `npm run build:admin` from the repo root.
 

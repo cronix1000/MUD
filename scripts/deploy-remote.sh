@@ -67,6 +67,9 @@ TAG="$TAG" REGISTRY="$REGISTRY" docker compose $COMPOSE_FLAGS pull --ignore-pull
 echo "[deploy] bring stack up"
 TAG="$TAG" REGISTRY="$REGISTRY" docker compose $COMPOSE_FLAGS up -d --remove-orphans
 
+echo "[deploy] reload caddy (picks up Caddyfile changes; --no-deps avoids recreating the upstream network)"
+TAG="$TAG" REGISTRY="$REGISTRY" docker compose $COMPOSE_FLAGS restart --no-deps caddy
+
 echo "[deploy] summary"
 TAG="$TAG" REGISTRY="$REGISTRY" docker compose $COMPOSE_FLAGS ps
 

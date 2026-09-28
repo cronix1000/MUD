@@ -170,7 +170,7 @@ const KINDS_REW = ['xp', 'gold', 'item', 'faction', 'lua']
   <div v-else class="space-y-4">
     <div class="flex items-center justify-between gap-3">
       <div class="flex items-center gap-3">
-        <NuxtLink to="/admin/world/quests" class="text-sky-400 hover:underline text-sm">← quests</NuxtLink>
+        <NuxtLink to="/world/quests" class="text-sky-400 hover:underline text-sm">← quests</NuxtLink>
         <h2 class="text-xl font-semibold font-mono">{{ quest.quest_id }}</h2>
         <span class="text-neutral-500 text-sm">{{ quest.name }}</span>
       </div>

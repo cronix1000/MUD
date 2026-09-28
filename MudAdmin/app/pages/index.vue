@@ -16,7 +16,7 @@ const worldTables = computed(() => data.value?.tables.filter((t) => t.startsWith
         <NuxtLink
           v-for="t in playerTables"
           :key="t"
-          :to="`/admin/${t}`"
+          :to="`/${t}`"
           class="block p-4 rounded border border-neutral-800 hover:border-neutral-600 bg-neutral-900"
         >
           <div class="font-mono text-sm">{{ t }}</div>
@@ -30,7 +30,7 @@ const worldTables = computed(() => data.value?.tables.filter((t) => t.startsWith
         <NuxtLink
           v-for="t in worldTables"
           :key="t"
-          :to="`/admin/${t}`"
+          :to="`/${t}`"
           class="block p-4 rounded border border-neutral-800 hover:border-neutral-600 bg-neutral-900"
         >
           <div class="font-mono text-sm">{{ t }}</div>

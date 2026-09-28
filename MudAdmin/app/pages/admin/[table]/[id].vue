@@ -88,11 +88,11 @@ async function save() {
 
 <template>
   <div>
-    <AdminRoomEditor v-if="composite && table === 'world_rooms'" :composite-key="idRaw" @close="navigateTo(`/admin/${table}`)" />
-    <AdminMobEditor v-else-if="composite && table === 'world_mobs'" :composite-key="idRaw" @close="navigateTo(`/admin/${table}`)" />
+    <AdminRoomEditor v-if="composite && table === 'world_rooms'" :composite-key="idRaw" @close="navigateTo(`/${table}`)" />
+    <AdminMobEditor v-else-if="composite && table === 'world_mobs'" :composite-key="idRaw" @close="navigateTo(`/${table}`)" />
     <div v-else>
       <div class="flex items-center gap-3 mb-4">
-        <NuxtLink :to="`/admin/${table}`" class="text-sky-400 hover:underline text-sm">← back</NuxtLink>
+        <NuxtLink :to="`/${table}`" class="text-sky-400 hover:underline text-sm">← back</NuxtLink>
         <h2 class="text-xl font-semibold font-mono">{{ table }} / {{ idRaw }}</h2>
       </div>
 

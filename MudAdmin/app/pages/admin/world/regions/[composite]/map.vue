@@ -155,7 +155,7 @@ const visibleExits = computed(() => {
   return items
 })
 
-const roomHref = (r: Room) => `/admin/world_rooms/${encodeURIComponent(encodeCompositeKey('world_rooms', r))}`
+const roomHref = (r: Room) => `/world_rooms/${encodeURIComponent(encodeCompositeKey('world_rooms', r))}`
 
 function downloadSvg() {
   const svg = (document.getElementById('region-map-svg') as SVGSVGElement | null)?.outerHTML
@@ -174,7 +174,7 @@ function downloadSvg() {
   <div class="space-y-4">
     <div class="flex items-center justify-between">
       <div>
-        <NuxtLink to="/admin/world/regions" class="text-sky-400 hover:underline text-sm">← regions</NuxtLink>
+        <NuxtLink to="/world/regions" class="text-sky-400 hover:underline text-sm">← regions</NuxtLink>
         <h2 class="text-2xl font-semibold font-mono mt-1">{{ region_id }}</h2>
         <p class="text-neutral-400 text-sm">{{ data?.rooms.length ?? 0 }} rooms, {{ data?.exits.length ?? 0 }} exits</p>
       </div>

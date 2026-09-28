@@ -85,7 +85,7 @@ const rewardCount = (qid: string) => (rewardsData.value?.rows ?? []).filter((r) 
             <td class="px-3 py-2">{{ objectiveCount(q.quest_id) }}</td>
             <td class="px-3 py-2">{{ rewardCount(q.quest_id) }}</td>
             <td class="px-3 py-2 text-right">
-              <NuxtLink :to="`/admin/world/quests/${encodeURIComponent(q.quest_id)}`" class="text-sky-400 hover:underline mr-3 text-sm">edit</NuxtLink>
+              <NuxtLink :to="`/world/quests/${encodeURIComponent(q.quest_id)}`" class="text-sky-400 hover:underline mr-3 text-sm">edit</NuxtLink>
               <button class="text-red-400 hover:underline text-sm" @click="deleteQuest(q)">delete</button>
             </td>
           </tr>

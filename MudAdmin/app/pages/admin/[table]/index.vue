@@ -68,7 +68,7 @@ function rowKey(row: Record<string, unknown>): string {
 }
 
 function rowHref(row: Record<string, unknown>): string {
-  return `/admin/${table.value}/${rowKey(row)}`
+  return `/${table.value}/${rowKey(row)}`
 }
 
 const totalLoaded = computed(() => data.value?.rows.length ?? 0)

@@ -26,21 +26,21 @@ const rawTables = computed(() => {
       <ul class="space-y-1 mb-4">
         <li>
           <NuxtLink
-            to="/admin/overview"
+            to="/overview"
             class="block px-2 py-1 rounded hover:bg-neutral-800 text-sm"
             :class="{ 'bg-neutral-800': current.includes('overview') }"
           >Overview</NuxtLink>
         </li>
         <li>
           <NuxtLink
-            to="/admin/_migrate"
+            to="/_migrate"
             class="block px-2 py-1 rounded hover:bg-neutral-800 text-sm"
             :class="{ 'bg-neutral-800': current.includes('_migrate') }"
           >Migrations</NuxtLink>
         </li>
         <li>
           <NuxtLink
-            to="/admin/snapshots"
+            to="/snapshots"
             class="block px-2 py-1 rounded hover:bg-neutral-800 text-sm"
             :class="{ 'bg-neutral-800': current.includes('snapshots') }"
           >Snapshots</NuxtLink>
@@ -51,42 +51,42 @@ const rawTables = computed(() => {
       <ul class="space-y-1 mb-4">
         <li>
           <NuxtLink
-            to="/admin/world/regions"
+            to="/world/regions"
             class="block px-2 py-1 rounded hover:bg-neutral-800 text-sm"
             :class="{ 'bg-neutral-800': current.includes('regions') && !current.includes('_') }"
           >Regions</NuxtLink>
         </li>
         <li>
           <NuxtLink
-            to="/admin/world/terrains"
+            to="/world/terrains"
             class="block px-2 py-1 rounded hover:bg-neutral-800 text-sm"
             :class="{ 'bg-neutral-800': current.includes('terrains') }"
           >Palette</NuxtLink>
         </li>
         <li>
           <NuxtLink
-            to="/admin/world/quests"
+            to="/world/quests"
             class="block px-2 py-1 rounded hover:bg-neutral-800 text-sm"
             :class="{ 'bg-neutral-800': current.includes('quests') }"
           >Quests</NuxtLink>
         </li>
         <li>
           <NuxtLink
-            to="/admin/loot"
+            to="/loot"
             class="block px-2 py-1 rounded hover:bg-neutral-800 text-sm"
             :class="{ 'bg-neutral-800': current.includes('loot') }"
           >Loot</NuxtLink>
         </li>
         <li>
           <NuxtLink
-            to="/admin/recipes"
+            to="/recipes"
             class="block px-2 py-1 rounded hover:bg-neutral-800 text-sm"
             :class="{ 'bg-neutral-800': current.includes('recipes') }"
           >Recipes</NuxtLink>
         </li>
         <li>
           <NuxtLink
-            to="/admin/scripts"
+            to="/scripts"
             class="block px-2 py-1 rounded hover:bg-neutral-800 text-sm"
             :class="{ 'bg-neutral-800': current.includes('scripts') }"
           >Scripts</NuxtLink>
@@ -100,7 +100,7 @@ const rawTables = computed(() => {
       <ul class="space-y-1 mb-4">
         <li v-for="t in tables.tables.filter((x) => x.startsWith('player_'))" :key="t">
           <NuxtLink
-            :to="`/admin/${t}`"
+            :to="`/${t}`"
             class="block px-2 py-1 rounded hover:bg-neutral-800 text-sm font-mono"
             :class="{ 'bg-neutral-800': current.includes(t) }"
           >
@@ -114,7 +114,7 @@ const rawTables = computed(() => {
         <summary class="text-xs text-neutral-400 cursor-pointer px-2 py-1 hover:bg-neutral-800 rounded">Content</summary>
         <ul class="space-y-1 ml-2 mt-1">
           <li v-for="t in rawTables.content" :key="t">
-            <NuxtLink :to="`/admin/${t}`" class="block px-2 py-1 rounded hover:bg-neutral-800 text-xs font-mono" :class="{ 'bg-neutral-800': current.includes(t) }">
+            <NuxtLink :to="`/${t}`" class="block px-2 py-1 rounded hover:bg-neutral-800 text-xs font-mono" :class="{ 'bg-neutral-800': current.includes(t) }">
               {{ t.replace('world_', '') }}
             </NuxtLink>
           </li>
@@ -124,7 +124,7 @@ const rawTables = computed(() => {
         <summary class="text-xs text-neutral-400 cursor-pointer px-2 py-1 hover:bg-neutral-800 rounded">Rooms & exits</summary>
         <ul class="space-y-1 ml-2 mt-1">
           <li v-for="t in rawTables.rooms" :key="t">
-            <NuxtLink :to="`/admin/${t}`" class="block px-2 py-1 rounded hover:bg-neutral-800 text-xs font-mono" :class="{ 'bg-neutral-800': current.includes(t) }">
+            <NuxtLink :to="`/${t}`" class="block px-2 py-1 rounded hover:bg-neutral-800 text-xs font-mono" :class="{ 'bg-neutral-800': current.includes(t) }">
               {{ t.replace('world_', '') }}
             </NuxtLink>
           </li>
@@ -134,7 +134,7 @@ const rawTables = computed(() => {
         <summary class="text-xs text-neutral-400 cursor-pointer px-2 py-1 hover:bg-neutral-800 rounded">Combat & skills</summary>
         <ul class="space-y-1 ml-2 mt-1">
           <li v-for="t in rawTables.combat" :key="t">
-            <NuxtLink :to="`/admin/${t}`" class="block px-2 py-1 rounded hover:bg-neutral-800 text-xs font-mono" :class="{ 'bg-neutral-800': current.includes(t) }">
+            <NuxtLink :to="`/${t}`" class="block px-2 py-1 rounded hover:bg-neutral-800 text-xs font-mono" :class="{ 'bg-neutral-800': current.includes(t) }">
               {{ t.replace('world_', '') }}
             </NuxtLink>
           </li>
@@ -144,7 +144,7 @@ const rawTables = computed(() => {
         <summary class="text-xs text-neutral-400 cursor-pointer px-2 py-1 hover:bg-neutral-800 rounded">Settings</summary>
         <ul class="space-y-1 ml-2 mt-1">
           <li v-for="t in rawTables.settings" :key="t">
-            <NuxtLink :to="`/admin/${t}`" class="block px-2 py-1 rounded hover:bg-neutral-800 text-xs font-mono" :class="{ 'bg-neutral-800': current.includes(t) }">
+            <NuxtLink :to="`/${t}`" class="block px-2 py-1 rounded hover:bg-neutral-800 text-xs font-mono" :class="{ 'bg-neutral-800': current.includes(t) }">
               {{ t.replace('world_', '') }}
             </NuxtLink>
           </li>

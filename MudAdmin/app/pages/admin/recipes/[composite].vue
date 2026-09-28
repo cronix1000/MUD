@@ -112,7 +112,7 @@ async function save() {
   <div v-else class="space-y-4 max-w-3xl">
     <div class="flex items-center justify-between gap-3">
       <div class="flex items-center gap-3">
-        <NuxtLink to="/admin/recipes" class="text-sky-400 hover:underline text-sm">← recipes</NuxtLink>
+        <NuxtLink to="/recipes" class="text-sky-400 hover:underline text-sm">← recipes</NuxtLink>
         <h2 class="text-xl font-semibold font-mono">{{ recipe.recipe_id }}</h2>
       </div>
       <button class="px-3 py-1.5 rounded bg-emerald-700 hover:bg-emerald-600 text-sm disabled:opacity-50" :disabled="saving" @click="save">

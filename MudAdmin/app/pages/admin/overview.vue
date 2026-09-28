@@ -33,20 +33,20 @@ const { data: regionsData } = await useFetch<{ rows: Region[] }>('/api/tables/wo
 const regions = computed(() => regionsData.value?.rows ?? [])
 
 const totals = computed(() => [
-  { label: 'Regions', value: stats.value?.regions ?? 0, href: '/admin/world/regions', color: 'text-emerald-300' },
+  { label: 'Regions', value: stats.value?.regions ?? 0, href: '/world/regions', color: 'text-emerald-300' },
   { label: 'Rooms', value: stats.value?.rooms ?? 0, href: null, color: 'text-emerald-300' },
   { label: 'Exits', value: stats.value?.exits ?? 0, href: null, color: 'text-neutral-300' },
   { label: 'Spawns', value: stats.value?.spawns ?? 0, href: null, color: 'text-neutral-300' },
-  { label: 'Mobs', value: stats.value?.mobs ?? 0, href: '/admin/world_mobs', color: 'text-red-300' },
+  { label: 'Mobs', value: stats.value?.mobs ?? 0, href: '/world_mobs', color: 'text-red-300' },
   { label: 'NPCs', value: stats.value?.npc_mobs ?? 0, href: null, color: 'text-cyan-300' },
-  { label: 'Items', value: stats.value?.items ?? 0, href: '/admin/world_items', color: 'text-yellow-300' },
-  { label: 'Interactables', value: stats.value?.interactables ?? 0, href: '/admin/world_interactables', color: 'text-purple-300' },
-  { label: 'Loot tables', value: stats.value?.loot_tables ?? 0, href: '/admin/loot', color: 'text-neutral-300' },
+  { label: 'Items', value: stats.value?.items ?? 0, href: '/world_items', color: 'text-yellow-300' },
+  { label: 'Interactables', value: stats.value?.interactables ?? 0, href: '/world_interactables', color: 'text-purple-300' },
+  { label: 'Loot tables', value: stats.value?.loot_tables ?? 0, href: '/loot', color: 'text-neutral-300' },
   { label: 'Skills', value: stats.value?.skills ?? 0, href: null, color: 'text-emerald-300' },
-  { label: 'Quests', value: stats.value?.quests ?? 0, href: '/admin/world/quests', color: 'text-amber-300' },
-  { label: 'Recipes', value: stats.value?.recipes ?? 0, href: '/admin/recipes', color: 'text-emerald-300' },
-  { label: 'Dialogues', value: stats.value?.dialogues ?? 0, href: '/admin/world_dialogues', color: 'text-neutral-300' },
-  { label: 'Players', value: stats.value?.players ?? 0, href: '/admin/player_players', color: 'text-sky-300' },
+  { label: 'Quests', value: stats.value?.quests ?? 0, href: '/world/quests', color: 'text-amber-300' },
+  { label: 'Recipes', value: stats.value?.recipes ?? 0, href: '/recipes', color: 'text-emerald-300' },
+  { label: 'Dialogues', value: stats.value?.dialogues ?? 0, href: '/world_dialogues', color: 'text-neutral-300' },
+  { label: 'Players', value: stats.value?.players ?? 0, href: '/player_players', color: 'text-sky-300' },
 ])
 
 const regionsByKind = computed(() => {
@@ -117,7 +117,7 @@ function refresh() { refreshStats() }
         <NuxtLink
           v-for="r in regions"
           :key="r.id"
-          :to="`/admin/world/regions/${encodeURIComponent(r.id)}`"
+          :to="`/world/regions/${encodeURIComponent(r.id)}`"
           class="block px-3 py-2 rounded border border-neutral-800 hover:border-neutral-600 bg-neutral-950"
         >
           <div class="flex items-center justify-between">
@@ -139,12 +139,12 @@ function refresh() { refreshStats() }
     <div class="bg-neutral-900 border border-neutral-800 rounded p-4">
       <h3 class="text-sm font-semibold mb-2">Quick links</h3>
       <div class="flex flex-wrap gap-2">
-        <NuxtLink to="/admin/world/regions" class="px-2 py-1 text-xs bg-neutral-800 hover:bg-neutral-700 rounded">All regions</NuxtLink>
-        <NuxtLink to="/admin/world/terrains" class="px-2 py-1 text-xs bg-neutral-800 hover:bg-neutral-700 rounded">Palette</NuxtLink>
-        <NuxtLink to="/admin/world_mobs" class="px-2 py-1 text-xs bg-neutral-800 hover:bg-neutral-700 rounded">Mobs</NuxtLink>
-        <NuxtLink to="/admin/recipes" class="px-2 py-1 text-xs bg-neutral-800 hover:bg-neutral-700 rounded">Recipes</NuxtLink>
-        <NuxtLink to="/admin/_migrate" class="px-2 py-1 text-xs bg-neutral-800 hover:bg-neutral-700 rounded">Migrations</NuxtLink>
-        <NuxtLink to="/admin/snapshots" class="px-2 py-1 text-xs bg-neutral-800 hover:bg-neutral-700 rounded">Snapshots</NuxtLink>
+        <NuxtLink to="/world/regions" class="px-2 py-1 text-xs bg-neutral-800 hover:bg-neutral-700 rounded">All regions</NuxtLink>
+        <NuxtLink to="/world/terrains" class="px-2 py-1 text-xs bg-neutral-800 hover:bg-neutral-700 rounded">Palette</NuxtLink>
+        <NuxtLink to="/world_mobs" class="px-2 py-1 text-xs bg-neutral-800 hover:bg-neutral-700 rounded">Mobs</NuxtLink>
+        <NuxtLink to="/recipes" class="px-2 py-1 text-xs bg-neutral-800 hover:bg-neutral-700 rounded">Recipes</NuxtLink>
+        <NuxtLink to="/_migrate" class="px-2 py-1 text-xs bg-neutral-800 hover:bg-neutral-700 rounded">Migrations</NuxtLink>
+        <NuxtLink to="/snapshots" class="px-2 py-1 text-xs bg-neutral-800 hover:bg-neutral-700 rounded">Snapshots</NuxtLink>
       </div>
     </div>
   </div>
