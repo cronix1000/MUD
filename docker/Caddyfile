@@ -22,6 +22,14 @@ https://tower-mud.unlrealities.ca {
         }
     }
 
+    handle /_nuxt/* {
+        reverse_proxy mud-client:3001 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-Proto https
+        }
+    }
+
     handle {
         reverse_proxy mud-client:3001 {
             header_up Host {host}
@@ -44,6 +52,14 @@ https://beta-tower-mud.unlrealities.ca {
 
     handle_path /admin* {
         reverse_proxy mud-admin-beta:3000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-Proto https
+        }
+    }
+
+    handle /_nuxt/* {
+        reverse_proxy mud-client-beta:3001 {
             header_up Host {host}
             header_up X-Real-IP {remote_host}
             header_up X-Forwarded-Proto https
