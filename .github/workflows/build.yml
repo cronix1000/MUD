@@ -120,5 +120,6 @@ jobs:
           build-args: |
             APP=${{ matrix.image == 'admin' && 'MudAdmin' || 'mudclient' }}
             ${{ matrix.image == 'client' && format('WS_URL={0}', env.WS_URL) || '' }}
+            CACHEBUST=${{ github.run_id }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

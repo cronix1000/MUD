@@ -25,6 +25,11 @@ COPY --from=deps /repo /repo
 COPY MudAdmin/  MudAdmin/
 COPY MudClient/ MudClient/
 
+# CACHEBUST is an ARG passed from build.yml as ${{ github.run_id }}; referencing
+# it in a RUN forces BuildKit to re-execute the build step on every run.
+ARG CACHEBUST=unset
+RUN echo "build run_id=${CACHEBUST}"
+
 # Stamp the WS URL into MudClient's nuxt.config.ts before building it.
 RUN if [ "$(echo "$APP" | tr '[:upper:]' '[:lower:]')" = "mudclient" ]; then \
       cp MudClient/nuxt.config.ts MudClient/nuxt.config.ts.orig && \

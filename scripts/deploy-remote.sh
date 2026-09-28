@@ -67,6 +67,13 @@ TAG="$TAG" REGISTRY="$REGISTRY" docker compose $COMPOSE_FLAGS pull --ignore-pull
 echo "[deploy] bring stack up"
 TAG="$TAG" REGISTRY="$REGISTRY" docker compose $COMPOSE_FLAGS up -d --remove-orphans
 
+echo "[deploy] force-recreate web containers (ensure newest :beta/:prod image is active)"
+if [[ "$PROFILE" == "beta" ]]; then
+  TAG="$TAG" REGISTRY="$REGISTRY" docker compose $COMPOSE_FLAGS up -d --force-recreate --no-deps mud-admin-beta mud-client-beta
+else
+  TAG="$TAG" REGISTRY="$REGISTRY" docker compose $COMPOSE_FLAGS up -d --force-recreate --no-deps mud-admin mud-client
+fi
+
 echo "[deploy] reload caddy (picks up Caddyfile changes; --no-deps avoids recreating the upstream network)"
 TAG="$TAG" REGISTRY="$REGISTRY" docker compose $COMPOSE_FLAGS restart --no-deps caddy
 
