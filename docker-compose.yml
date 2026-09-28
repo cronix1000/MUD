@@ -170,15 +170,12 @@ services:
       - "8443"
 
   mud-admin-beta:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.web
-      args:
-        APP: MudAdmin
+    <<: *admin-base
+    profiles: ["beta"]
+    build: ~         # image-only service; override the anchor's build.
     image: ${REGISTRY:-ghcr.io/cronix1000}/mud-admin:${TAG:-beta}
     container_name: mud-admin-beta
     hostname: mud-admin-beta
-    profiles: ["beta"]
     restart: unless-stopped
     environment:
       MUD_DATABASE_URL: ${MUD_DATABASE_URL_BETA:?MUD_DATABASE_URL_BETA must be set in .env}
@@ -190,16 +187,12 @@ services:
       - "3000"
 
   mud-client-beta:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.web
-      args:
-        APP: mudclient
-        WS_URL: ${BETA_WS_URL:-<lan-host>:18080/ws}
+    <<: *client-base
+    profiles: ["beta"]
+    build: ~         # image-only service; override the anchor's build.
     image: ${REGISTRY:-ghcr.io/cronix1000}/mud-client:${TAG:-beta}
     container_name: mud-client-beta
     hostname: mud-client-beta
-    profiles: ["beta"]
     restart: unless-stopped
     environment:
       HOST: 0.0.0.0
