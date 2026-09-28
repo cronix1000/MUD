@@ -4,9 +4,7 @@ import { resolveWikiId } from '~/utils/wikiId'
 
 interface ColumnInfo { name: string; type: string; pk: number; dflt_value: unknown; notnull: number }
 
-const split = computed(() => decodeURIComponent(props.compositeKey).split('::'))
-const worldId = computed(() => split.value[0] ?? '')
-const templateId = computed(() => split.value[1] ?? '')
+const templateId = computed(() => decodeURIComponent(props.compositeKey))
 
 const props = defineProps<{
   compositeKey: string
@@ -18,17 +16,14 @@ const { data, refresh } = await useFetch<{ columns: ColumnInfo[]; rows: Record<s
 )
 
 interface DialogueSummary {
-  world_id: string
   node_id: string
   text: string | null
 }
 
 const { data: dialoguesData } = await useFetch<{ rows: DialogueSummary[] }>(`/api/tables/world_dialogues`)
 
-const dialoguesInWorld = computed(() => (dialoguesData.value?.rows ?? []).filter((d) => d.world_id === worldId.value))
-
 const mob = computed(() => {
-  return data.value?.rows.find((r) => String(r.world_id) === worldId.value && String(r.template_id) === templateId.value)
+  return data.value?.rows.find((r) => String(r.template_id) === templateId.value)
 })
 
 const draft = ref<Record<string, string>>({})
@@ -54,11 +49,11 @@ async function save() {
   saving.value = true
   error.value = null
   try {
-    const key = `${mob.value.world_id}::${mob.value.template_id}`
+    const key = `${mob.value.template_id}`
     const body = {
       ...draft.value,
-      loot_drop: resolveWikiId(draft.value.loot_drop, mob.value.world_id),
-      dialogue_root: resolveWikiId(draft.value.dialogue_root, mob.value.world_id),
+      loot_drop: resolveWikiId(draft.value.loot_drop),
+      dialogue_root: resolveWikiId(draft.value.dialogue_root),
       script_ref: resolveWikiId(scriptRef.value) || '',
     }
     await $fetch(`/api/tables/world_mobs/${encodeURIComponent(key)}`, {
@@ -116,7 +111,7 @@ function updateScriptRef(v: ScriptModelShape) {
           <input v-model="draft.char" maxlength="1" class="w-full bg-neutral-950 border border-neutral-700 rounded px-2 py-1 font-mono text-center" />
         </label>
         <label class="col-span-2 text-sm">
-          <AdminWikiText v-model="draft.description" :world-id="worldId" :rows="3" />
+          <AdminWikiText v-model="draft.description" :rows="3" />
         </label>
         <label class="text-sm">
           <span class="block text-neutral-400 mb-1">color</span>
@@ -148,13 +143,13 @@ function updateScriptRef(v: ScriptModelShape) {
         </label>
         <label class="text-sm">
           <span class="block text-neutral-400 mb-1">loot_drop</span>
-          <AdminWikiIdInput v-model="draft.loot_drop" :world-id="worldId" placeholder="loot table id" />
+          <AdminWikiIdInput v-model="draft.loot_drop" placeholder="loot table id" />
         </label>
         <label class="text-sm">
           <span class="block text-neutral-400 mb-1">dialogue_root</span>
           <select v-model="draft.dialogue_root" class="w-full bg-neutral-950 border border-neutral-700 rounded px-2 py-1 font-mono">
             <option value="">— none —</option>
-            <option v-for="d in dialoguesInWorld" :key="d.node_id" :value="d.node_id">{{ d.node_id }} {{ d.text ? '— ' + d.text.slice(0, 40) : '' }}</option>
+            <option v-for="d in dialoguesData?.rows ?? []" :key="d.node_id" :value="d.node_id">{{ d.node_id }} {{ d.text ? '— ' + d.text.slice(0, 40) : '' }}</option>
           </select>
         </label>
       </div>

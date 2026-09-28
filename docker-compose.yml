@@ -210,19 +210,3 @@ services:
     expose:
       - "3001"
 
-  caddy-beta:
-    image: caddy:2-alpine
-    container_name: mud-caddy-beta
-    profiles: ["beta"]
-    restart: unless-stopped
-    ports:
-      - "${BETA_HTTP_PORT:-18080}:80"
-      - "${BETA_HTTPS_PORT:-18443}:443"
-    volumes:
-      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
-    networks:
-      - mud-net-beta
-    depends_on:
-      - mud-client-beta
-      - mud-admin-beta
-      - mud-gateway-beta

@@ -1,7 +1,6 @@
 export interface GraphRoom {
   room_id: number
   name: string
-  world_id: string
   region_id: string
   terrain?: string | null
   width?: number | null

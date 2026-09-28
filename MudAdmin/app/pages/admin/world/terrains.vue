@@ -4,7 +4,6 @@ import { ANSI_COLORS, ansiToCss, ansiToForeground } from '~/utils/ansi'
 definePageMeta({ layout: 'admin' })
 
 interface TerrainRow {
-  world_id: string
   symbol: string
   name: string
   color: string | null
@@ -13,17 +12,9 @@ interface TerrainRow {
   move_cost: number
 }
 
-interface World {
-  id: string
-  name: string
-}
-
 const { data: terrainsData, refresh } = await useFetch<{ rows: TerrainRow[] }>('/api/tables/world_terrains')
-const { data: worldsData } = await useFetch<{ rows: World[] }>('/api/tables/world_worlds')
 
-const selectedWorld = ref<string>('')
 const newRow = ref({
-  world_id: '',
   symbol: '',
   name: '',
   color: '&y',
@@ -35,43 +26,23 @@ const editing = ref<Record<string, Partial<TerrainRow>>>({})
 const error = ref<string | null>(null)
 const success = ref<string | null>(null)
 
-watchEffect(() => {
-  if (!selectedWorld.value && worldsData.value?.rows.length) {
-    selectedWorld.value = worldsData.value.rows[0].id
-  }
-  if (selectedWorld.value) {
-    newRow.value.world_id = selectedWorld.value
-  }
-})
-
-const rows = computed(() => (terrainsData.value?.rows ?? []).filter((r) => r.world_id === selectedWorld.value))
+const rows = computed(() => terrainsData.value?.rows ?? [])
 
 const usedSymbols = computed(() => new Set(rows.value.map((r) => r.symbol)))
 
 const symbolConflict = computed(() => usedSymbols.value.has(newRow.value.symbol))
 
-const unrecognizedSymbols = computed<Set<string>>(() => {
-  const known = usedSymbols.value
-  known.add(' ')
-  const used = new Set<string>()
-  for (const r of (terrainsData.value?.rows ?? [])) {
-    if (r.world_id !== selectedWorld.value) continue
-  }
-  return used
-})
-
 async function addRow() {
   error.value = null
   success.value = null
-  if (!newRow.value.symbol || !newRow.value.name || !newRow.value.world_id) {
-    error.value = 'world_id, symbol, and name are required'
+  if (!newRow.value.symbol || !newRow.value.name) {
+    error.value = 'symbol and name are required'
     return
   }
   try {
     await $fetch(`/api/tables/world_terrains`, {
       method: 'POST',
       body: {
-        world_id: newRow.value.world_id,
         symbol: newRow.value.symbol,
         name: newRow.value.name,
         color: newRow.value.color,
@@ -91,7 +62,7 @@ async function addRow() {
 
 async function saveRow(r: TerrainRow) {
   error.value = null
-  const key = `${r.world_id}::${encodeURIComponent(r.symbol)}`
+  const key = `${encodeURIComponent(r.symbol)}`
   const patch = editing.value[key] ?? {}
   try {
     await $fetch(`/api/tables/world_terrains/${key}`, {
@@ -114,18 +85,18 @@ async function saveRow(r: TerrainRow) {
 
 async function deleteRow(r: TerrainRow) {
   if (!confirm(`Delete tile '${r.symbol}' (${r.name})?`)) return
-  const key = `${r.world_id}::${encodeURIComponent(r.symbol)}`
+  const key = `${encodeURIComponent(r.symbol)}`
   await $fetch(`/api/tables/world_terrains/${key}`, { method: 'DELETE' })
   await refresh()
 }
 
 function field<K extends keyof TerrainRow>(r: TerrainRow, key: K): Partial<TerrainRow[K]> {
-  const k = `${r.world_id}::${encodeURIComponent(r.symbol)}`
+  const k = `${encodeURIComponent(r.symbol)}`
   return editing.value[k]?.[key] ?? r[key]
 }
 
 function setField<K extends keyof TerrainRow>(r: TerrainRow, key: K, value: TerrainRow[K]) {
-  const k = `${r.world_id}::${encodeURIComponent(r.symbol)}`
+  const k = `${encodeURIComponent(r.symbol)}`
   editing.value[k] = { ...(editing.value[k] ?? {}), [key]: value }
 }
 
@@ -133,14 +104,12 @@ const seeding = ref(false)
 const validationResults = ref<Array<{ room_id: number; name: string; issues: string[] }> | null>(null)
 
 async function seedPalette() {
-  if (!selectedWorld.value) return
   seeding.value = true
   error.value = null
   success.value = null
   try {
     const res = await $fetch<{ seeded: number; skipped: boolean; message: string }>('/api/terrains/seed', {
       method: 'POST',
-      body: { world_id: selectedWorld.value },
     })
     success.value = res.message
     await refresh()
@@ -152,13 +121,30 @@ async function seedPalette() {
   }
 }
 
-const { data: roomsData } = await useFetch<{ rows: Array<{ world_id: string; region_id: string; room_id: number; name: string; width: number; height: number; layout_json: string | null }> }>('/api/tables/world_rooms')
+async function seedFloorsPalette() {
+  seeding.value = true
+  error.value = null
+  success.value = null
+  try {
+    const res = await $fetch<{ ok: boolean; message: string }>('/api/terrains/seed-floors', {
+      method: 'POST',
+    })
+    success.value = res.message
+  } catch (e: unknown) {
+    const err = e as { data?: { statusMessage?: string } }
+    error.value = err.data?.statusMessage ?? 'Seed failed'
+  } finally {
+    seeding.value = false
+  }
+}
+
+const { data: roomsData } = await useFetch<{ rows: Array<{ region_id: string; room_id: number; name: string; width: number; height: number; layout_json: string | null }> }>('/api/tables/world_rooms')
 
 function validateLayouts() {
   const palette = new Set(rows.value.map((r) => r.symbol))
   palette.add(' ')
   const results: Array<{ room_id: number; name: string; issues: string[] }> = []
-  const rooms = (roomsData.value?.rows ?? []).filter((r) => r.world_id === selectedWorld.value)
+  const rooms = roomsData.value?.rows ?? []
   for (const r of rooms) {
     const issues: string[] = []
     if (!r.layout_json) continue
@@ -203,20 +189,26 @@ function validateLayouts() {
       <div>
         <h2 class="text-2xl font-semibold font-mono">Palette</h2>
         <p class="text-neutral-400 text-sm mt-1">
-          Tiles used in room layouts. Palette is shared across all regions in a world.
+          Global fallback tiles used in room layouts.
+          Each region may override these on the
+          <NuxtLink to="/admin/world/regions" class="text-sky-400 hover:underline">region editor</NuxtLink>
+          via <code>floor_palette_json</code>.
         </p>
       </div>
       <div class="flex items-center gap-2">
-        <label class="text-sm text-neutral-400">World:</label>
-        <select v-model="selectedWorld" class="bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-sm font-mono">
-          <option v-for="w in worldsData?.rows" :key="w.id" :value="w.id">{{ w.id }}</option>
-        </select>
         <button
           class="px-3 py-1.5 rounded bg-sky-700 hover:bg-sky-600 text-sm disabled:opacity-50"
-          :disabled="seeding || !selectedWorld"
+          :disabled="seeding"
           @click="seedPalette"
         >
-          {{ seeding ? 'Seeding…' : 'Seed starter palette' }}
+          {{ seeding ? 'Seeding global…' : 'Seed global palette' }}
+        </button>
+        <button
+          class="px-3 py-1.5 rounded bg-violet-700 hover:bg-violet-600 text-sm disabled:opacity-50"
+          :disabled="seeding"
+          @click="seedFloorsPalette"
+        >
+          {{ seeding ? 'Seeding floors…' : 'Seed 7 floor palettes' }}
         </button>
         <button
           class="px-3 py-1.5 rounded bg-neutral-700 hover:bg-neutral-600 text-sm"
@@ -286,11 +278,11 @@ function validateLayouts() {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="r in rows" :key="`${r.world_id}-${r.symbol}`" class="hover:bg-neutral-900/60">
+          <tr v-for="r in rows" :key="r.symbol" class="hover:bg-neutral-900/60">
             <td class="px-3 py-2 border-b border-neutral-900">
               <div
                 class="w-8 h-8 inline-flex items-center justify-center font-mono text-base rounded"
-                :style="{ background: ansiToCss(field(r,'color') as string | null), color: ansiToForeground(field(r,'color') as string | null) }"
+                :style="{ background: '#1a1a1a', color: ansiToCss(field(r,'color') as string | null) }"
               >
                 {{ r.symbol === ' ' ? '·' : r.symbol }}
               </div>
@@ -342,7 +334,7 @@ function validateLayouts() {
           </tr>
           <tr v-if="!rows.length">
             <td colspan="8" class="px-3 py-6 text-center text-neutral-500">
-              No tiles in this world yet. Add one above.
+              No tiles yet. Add one above.
             </td>
           </tr>
         </tbody>
@@ -351,10 +343,10 @@ function validateLayouts() {
 
     <div v-if="validationResults" class="bg-neutral-900 border border-neutral-800 rounded p-4">
       <h3 class="text-sm font-semibold mb-2">Layout validation</h3>
-      <div v-if="!validationResults.length" class="text-emerald-400 text-sm">All layouts in this world look good.</div>
+      <div v-if="!validationResults.length" class="text-emerald-400 text-sm">All layouts look good.</div>
       <ul v-else class="space-y-2">
         <li v-for="r in validationResults" :key="r.room_id" class="border-l-2 border-amber-600 pl-3 text-sm">
-          <NuxtLink :to="`/admin/world_rooms/${encodeURIComponent(selectedWorld + '::floor1::' + r.room_id)}`" class="text-sky-400 hover:underline font-mono">#{{ r.room_id }} {{ r.name }}</NuxtLink>
+          <NuxtLink :to="`/admin/world_rooms/${encodeURIComponent('floor1::' + r.room_id)}`" class="text-sky-400 hover:underline font-mono">#{{ r.room_id }} {{ r.name }}</NuxtLink>
           <ul class="ml-4 mt-1 text-neutral-300">
             <li v-for="(iss, i) in r.issues" :key="i" class="font-mono text-xs">• {{ iss }}</li>
           </ul>

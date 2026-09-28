@@ -27,6 +27,10 @@ The C++ server (`ModularMudServer`) is intentionally **excluded from npm workspa
 | Typecheck client  | `npm run typecheck:client`       |
 | Build C++ server  | see `ModularMudServer/AGENTS.md` |
 | Bring up Postgres | `docker compose -f docker/postgresql/docker-compose.yml up -d postgres` |
+| Deploy prod stack | `TAG=prod REGISTRY=ghcr.io/cronix1000 docker compose --profile prod --profile beta up -d` |
+| Deploy beta stack | `TAG=beta REGISTRY=ghcr.io/cronix1000 docker compose --profile prod --profile beta up -d` |
+
+Both deploy commands bring up **both** profiles because the prod Caddy is the sole HTTPS terminator on host `:443`/`:80` and serves both `tower-mud.unlrealities.ca` and `beta-tower-mud.unlrealities.ca` (see `docker/Caddyfile`). There is no `caddy-beta`; beta app containers reach the host Caddy through the shared `mud-net-beta` network.
 
 `MudAdmin` has no `typecheck` script — its `npm run build` is the canonical compile + typecheck gate. Run `npm run build:admin` from the repo root.
 
@@ -54,11 +58,11 @@ This repo uses **Pattern 1**: secrets live in env files on the host (`docker/.en
 | Consumer | URL source |
 |---|---|
 | `mud-server.exe` (local dev, F5) | `ModularMudServer.vcxproj.user` → `<LocalDebuggerEnvironment>` |
-| `mud-server.exe` (deployed prod) | `docker-compose.yml:84` reads `MUD_DATABASE_URL_PROD` from `docker/.env` |
-| `mud-server-beta` (deployed beta) | `docker-compose.yml:172` reads `MUD_DATABASE_URL_BETA` from `docker/.env` |
+| `mud-server.exe` (deployed prod) | `docker-compose.yml` reads `MUD_DATABASE_URL_PROD` from `docker/.env` |
+| `mud-server-beta` (deployed beta) | `docker-compose.yml` reads `MUD_DATABASE_URL_BETA` from `docker/.env` |
 | `MudAdmin` (local dev) | `MudAdmin/.env` → `MUD_DATABASE_URL` |
-| `mud-admin` (deployed prod) | `docker-compose.yml:120` reads `MUD_DATABASE_URL_PROD` |
-| `mud-admin-beta` (deployed beta) | `docker-compose.yml:213` reads `MUD_DATABASE_URL_BETA` |
+| `mud-admin` (deployed prod) | `docker-compose.yml` reads `MUD_DATABASE_URL_PROD` |
+| `mud-admin-beta` (deployed beta) | `docker-compose.yml` reads `MUD_DATABASE_URL_BETA` |
 
 Canonical URL shapes (no `?options=...` segment — `ModularMudServer/PostgresDatabase.cpp:51-66` and `MudAdmin/server/utils/db.ts:43-52` set `search_path` per-connect, and the role default is set by `docker/postgresql/init/00-bootstrap.sh:60-61`):
 
@@ -66,11 +70,12 @@ Canonical URL shapes (no `?options=...` segment — `ModularMudServer/PostgresDa
 # Local dev (Windows + SSH tunnel)
 postgresql://mud_beta:<pw>@127.0.0.1:5432/mud_beta
 
-# Beta on the VPS (inside docker-compose; `postgres` is the docker network alias)
-postgresql://mud_beta:<pw>@postgres:5432/mud_beta
+# Beta on the VPS — the postgres container_name is `mud-postgres` and
+# it sits on both `mud-net` and `mud-net-beta` (connected manually).
+postgresql://mud_beta:<pw>@mud-postgres:5432/mud_beta
 
 # Prod on the VPS
-postgresql://mud_prod:<pw>@postgres:5432/mud_prod
+postgresql://mud_prod:<pw>@mud-postgres:5432/mud_prod
 ```
 
 If you ever need options in a URL for a non-app consumer (psql, ETL), use `+` instead of `%20` for spaces — libpq doesn't decode `%20` inside `?options=...`:
@@ -82,7 +87,7 @@ postgresql://mud_beta:<pw>@127.0.0.1:5432/mud_beta?options=-c+search_path=world,
 **Rotation procedure:**
 1. Edit `docker/postgresql/pg.env` on the VPS, set new `MUD_PROD_PASSWORD` (or `MUD_BETA_PASSWORD`).
 2. `cd ~/postgre && docker compose restart postgres` to load the new password.
-3. `cd ~/mud && TAG=prod REGISTRY=ghcr.io/cronix1000 docker compose --profile prod up -d --force-recreate mud-server mud-admin` (or `--profile beta` for beta) to pick up the new `docker/.env` value.
+3. `cd ~/MUD && TAG=prod REGISTRY=ghcr.io/cronix1000 docker compose --profile prod --profile beta up -d --force-recreate mud-server mud-admin mud-server-beta mud-admin-beta` to pick up the new `docker/.env` value.
 4. Smoke: `docker logs --tail=20 mud-server | grep "Connected (search_path="`.
 
 **Out of scope for now (deliberate tech debt):**

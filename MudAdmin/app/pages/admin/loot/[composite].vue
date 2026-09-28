@@ -10,23 +10,21 @@ interface LootEntry {
 
 const route = useRoute()
 const compositeKey = computed(() => decodeURIComponent(String(route.params.composite)))
-const split = computed(() => compositeKey.value.split('::'))
-const worldId = computed(() => split.value[0] ?? '')
-const tableId = computed(() => split.value[1] ?? '')
+const tableId = computed(() => compositeKey.value)
 
-const { data, refresh } = await useFetch<{ rows: Array<{ world_id: string; table_id: string; name: string | null; entries_json: string | null }> }>(
+const { data, refresh } = await useFetch<{ rows: Array<{ table_id: string; name: string | null; entries_json: string | null }> }>(
   `/api/tables/world_loot_tables`,
 )
-const { data: itemsData } = await useFetch<{ rows: Array<{ world_id: string; template_id: string; name: string }> }>(
+const { data: itemsData } = await useFetch<{ rows: Array<{ template_id: string; name: string }> }>(
   `/api/tables/world_items`,
 )
-const { data: mobsData } = await useFetch<{ rows: Array<{ world_id: string; template_id: string; name: string; loot_drop: string | null }> }>(
+const { data: mobsData } = await useFetch<{ rows: Array<{ template_id: string; name: string; loot_drop: string | null }> }>(
   `/api/tables/world_mobs`,
 )
 
-const table = computed(() => (data.value?.rows ?? []).find((t) => t.world_id === worldId.value && t.table_id === tableId.value))
-const itemsInWorld = computed(() => (itemsData.value?.rows ?? []).filter((i) => i.world_id === worldId.value))
-const linkedMobs = computed(() => (mobsData.value?.rows ?? []).filter((m) => m.world_id === worldId.value && m.loot_drop === tableId.value))
+const table = computed(() => (data.value?.rows ?? []).find((t) => t.table_id === tableId.value))
+const itemsInWorld = computed(() => itemsData.value?.rows ?? [])
+const linkedMobs = computed(() => (mobsData.value?.rows ?? []).filter((m) => m.loot_drop === tableId.value))
 
 const draft = reactive({
   name: '',
@@ -61,7 +59,7 @@ async function save() {
   saving.value = true
   error.value = null
   try {
-    const key = `${worldId.value}::${tableId.value}`
+    const key = `${tableId.value}`
     await $fetch(`/api/tables/world_loot_tables/${encodeURIComponent(key)}`, {
       method: 'PUT',
       body: {
@@ -142,7 +140,7 @@ async function save() {
       <h3 class="text-sm font-semibold mb-2">Linked from mobs</h3>
       <ul class="text-sm space-y-1">
         <li v-for="m in linkedMobs" :key="m.template_id" class="font-mono">
-          <NuxtLink :to="`/admin/world_mobs/${encodeURIComponent(m.world_id + '::' + m.template_id)}`" class="text-sky-400 hover:underline">{{ m.template_id }}</NuxtLink>
+          <NuxtLink :to="`/admin/world_mobs/${encodeURIComponent(m.template_id)}`" class="text-sky-400 hover:underline">{{ m.template_id }}</NuxtLink>
           <span class="text-neutral-400 ml-2">{{ m.name }}</span>
         </li>
       </ul>

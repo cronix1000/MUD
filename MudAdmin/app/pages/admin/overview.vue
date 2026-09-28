@@ -2,7 +2,6 @@
 definePageMeta({ layout: 'admin' })
 
 interface Stats {
-  worlds: number
   regions: number
   regions_static: number
   regions_instanced: number
@@ -23,7 +22,6 @@ interface Stats {
 }
 
 interface Region {
-  world_id: string
   id: string
   name: string
   region_kind: string | null
@@ -35,7 +33,6 @@ const { data: regionsData } = await useFetch<{ rows: Region[] }>('/api/tables/wo
 const regions = computed(() => regionsData.value?.rows ?? [])
 
 const totals = computed(() => [
-  { label: 'Worlds', value: stats.value?.worlds ?? 0, href: null, color: 'text-emerald-300' },
   { label: 'Regions', value: stats.value?.regions ?? 0, href: '/admin/world/regions', color: 'text-emerald-300' },
   { label: 'Rooms', value: stats.value?.rooms ?? 0, href: null, color: 'text-emerald-300' },
   { label: 'Exits', value: stats.value?.exits ?? 0, href: null, color: 'text-neutral-300' },
@@ -119,8 +116,8 @@ function refresh() { refreshStats() }
       <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
         <NuxtLink
           v-for="r in regions"
-          :key="`${r.world_id}-${r.id}`"
-          :to="`/admin/world/regions/${encodeURIComponent(r.world_id + '::' + r.id)}`"
+          :key="r.id"
+          :to="`/admin/world/regions/${encodeURIComponent(r.id)}`"
           class="block px-3 py-2 rounded border border-neutral-800 hover:border-neutral-600 bg-neutral-950"
         >
           <div class="flex items-center justify-between">
@@ -134,7 +131,7 @@ function refresh() { refreshStats() }
               }"
             >{{ r.region_kind }}</span>
           </div>
-          <div class="text-neutral-400 text-xs mt-1">{{ r.world_id }} · {{ r.name }}</div>
+          <div class="text-neutral-400 text-xs mt-1">{{ r.name }}</div>
         </NuxtLink>
       </div>
     </div>

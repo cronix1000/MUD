@@ -23,16 +23,16 @@ const composite = computed(() => isCompositeKey(table.value))
 
 function compositeFields(t: string): string[] {
   const map: Record<string, string[]> = {
-    world_rooms: ['world_id', 'region_id', 'room_id'],
-    world_mobs: ['world_id', 'template_id'],
-    world_items: ['world_id', 'template_id'],
-    world_interactables: ['world_id', 'template_id'],
-    world_terrains: ['world_id', 'symbol'],
-    world_loot_tables: ['world_id', 'table_id'],
-    world_dialogues: ['world_id', 'node_id'],
-    world_quests: ['world_id', 'quest_id'],
-    world_quest_objectives: ['world_id', 'quest_id', 'ordinal'],
-    world_quest_rewards: ['world_id', 'quest_id', 'ordinal'],
+    world_rooms: ['region_id', 'room_id'],
+    world_mobs: ['template_id'],
+    world_items: ['template_id'],
+    world_interactables: ['template_id'],
+    world_terrains: ['symbol'],
+    world_loot_tables: ['table_id'],
+    world_dialogues: ['node_id'],
+    world_quests: ['quest_id'],
+    world_quest_objectives: ['quest_id', 'ordinal'],
+    world_quest_rewards: ['quest_id', 'ordinal'],
   }
   return map[t] ?? []
 }

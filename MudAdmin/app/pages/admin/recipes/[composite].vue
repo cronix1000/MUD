@@ -3,12 +3,9 @@ definePageMeta({ layout: 'admin' })
 
 const route = useRoute()
 const compositeKey = computed(() => decodeURIComponent(String(route.params.composite)))
-const split = computed(() => compositeKey.value.split('::'))
-const worldId = computed(() => split.value[0] ?? '')
-const recipeId = computed(() => split.value[1] ?? '')
+const recipeId = computed(() => compositeKey.value)
 
 interface RecipeRow {
-  world_id: string
   recipe_id: string
   name: string
   description: string | null
@@ -25,8 +22,8 @@ interface RecipeRow {
   xp_curve_params?: string | null
 }
 
-interface Item { world_id: string; template_id: string; name: string }
-interface Skill { world_id: string; skill_id: string; name: string; xp_curve?: string | null }
+interface Item { template_id: string; name: string }
+interface Skill { skill_id: string; name: string; xp_curve?: string | null }
 
 interface IoEntry { item_template_id: string; quantity: number }
 
@@ -34,10 +31,10 @@ const { data, refresh } = await useFetch<{ rows: RecipeRow[] }>('/api/tables/wor
 const { data: itemsData } = await useFetch<{ rows: Item[] }>('/api/tables/world_items')
 const { data: skillsData } = await useFetch<{ rows: Skill[] }>('/api/tables/world_skills')
 
-const recipe = computed(() => (data.value?.rows ?? []).find((r) => r.world_id === worldId.value && r.recipe_id === recipeId.value))
+const recipe = computed(() => (data.value?.rows ?? []).find((r) => r.recipe_id === recipeId.value))
 
-const itemsInWorld = computed(() => (itemsData.value?.rows ?? []).filter((i) => i.world_id === worldId.value))
-const skillsInWorld = computed(() => (skillsData.value?.rows ?? []).filter((s) => s.world_id === worldId.value))
+const itemsInWorld = computed(() => itemsData.value?.rows ?? [])
+const skillsInWorld = computed(() => skillsData.value?.rows ?? [])
 
 const draft = reactive({
   name: '',
@@ -82,7 +79,7 @@ async function save() {
   saving.value = true
   error.value = null
   try {
-    const key = `${worldId.value}::${recipeId.value}`
+    const key = `${recipeId.value}`
     await $fetch(`/api/tables/world_recipes/${encodeURIComponent(key)}`, {
       method: 'PUT',
       body: {
@@ -117,7 +114,6 @@ async function save() {
       <div class="flex items-center gap-3">
         <NuxtLink to="/admin/recipes" class="text-sky-400 hover:underline text-sm">← recipes</NuxtLink>
         <h2 class="text-xl font-semibold font-mono">{{ recipe.recipe_id }}</h2>
-        <span class="text-neutral-500 text-sm">{{ worldId }}</span>
       </div>
       <button class="px-3 py-1.5 rounded bg-emerald-700 hover:bg-emerald-600 text-sm disabled:opacity-50" :disabled="saving" @click="save">
         {{ saving ? 'Saving…' : 'Save' }}
@@ -134,7 +130,7 @@ async function save() {
         <input v-model="draft.name" class="w-full bg-neutral-950 border border-neutral-700 rounded px-2 py-1" />
       </label>
       <div>
-        <AdminWikiText v-model="draft.description" :world-id="worldId" :rows="3" />
+        <AdminWikiText v-model="draft.description" :rows="3" />
       </div>
     </div>
 

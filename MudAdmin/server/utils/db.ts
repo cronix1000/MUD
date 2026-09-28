@@ -7,7 +7,6 @@ const ALLOWED_TABLES = new Set([
   'player_players',
   'player_items',
   'player_known_recipes',
-  'world_worlds',
   'world_regions',
   'world_rooms',
   'world_room_exits',
@@ -30,6 +29,7 @@ const ALLOWED_TABLES = new Set([
 
 function defaultConnectionString(): string {
   const url = process.env.MUD_DATABASE_URL
+  console.log("url: "+ url)
   if (!url) {
     throw new Error(
       'MUD_DATABASE_URL is required (e.g. postgresql://mud_prod:...@postgres:5432/mud_prod). ' +
@@ -128,10 +128,10 @@ function buildWhere(table: string, id: unknown): { sql: string; params: unknown[
     if (!id || typeof id !== 'object') {
       throw createError({ statusCode: 400, statusMessage: `${table} requires composite key object` })
     }
-    const parts = spec.fields.map((f) => `${f} = $1`)
+    const parts = spec.fields.map((f, i) => `${f} = $${i + 1}`)
     return {
       sql: parts.join(' and '),
-      params: [spec.fields.map((f) => (id as Record<string, unknown>)[f])],
+      params: spec.fields.map((f) => (id as Record<string, unknown>)[f]),
     }
   }
   throw createError({
@@ -233,7 +233,7 @@ export async function updateRow(table: string, id: unknown, body: Record<string,
     ? w.sql.replace(/\$(\d+)/g, (_, n) => `$${Number(n) + baseIdx}`)
     : `${singlePk} = $${baseIdx + 1}`
   const params = isComposite(table)
-    ? [...validKeys.map((k) => payload[k]), ...w.params[0] as unknown[]]
+    ? [...validKeys.map((k) => payload[k]), ...w.params]
     : [...validKeys.map((k) => payload[k]), (w.params as unknown[])[0]]
   const res = await getPool().query(
     `update ${qualified(table)} set ${setSql} where ${whereSql}`,

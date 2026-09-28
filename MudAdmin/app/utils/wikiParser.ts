@@ -38,12 +38,8 @@ export function parseWiki(text: string): WikiToken[] {
 
 export function entityHref(type: EntityType, id: string): string {
   switch (type) {
-    case 'room': {
-      const parts = id.split('::')
-      const roomId = parts.pop() ?? ''
-      const region = parts.join('::')
-      return `/admin/world_rooms/${encodeURIComponent(region + '::' + roomId)}`
-    }
+    case 'room':
+      return `/admin/world_rooms/${encodeURIComponent(id)}`
     case 'region':
       return `/admin/world/regions/${encodeURIComponent(id)}`
     case 'mob':
