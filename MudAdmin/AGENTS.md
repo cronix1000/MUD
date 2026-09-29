@@ -92,15 +92,6 @@ Adding a new composite-key table:
 
 Auto-increment PKs: `world_room_exits` and `world_room_spawns` have single `id INTEGER PRIMARY KEY AUTOINCREMENT`. They are NOT in `COMPOSITE_KEYS`; the insert path in `server/utils/db.ts` skips the PK requirement when the column is `INTEGER` + `pk=1`.
 
-## Region kinds
-
-`world_regions.region_kind` is one of:
-- `static` — designer-authored, persistent, no cap.
-- `tutorial` — like static but with `tutorial_steps_json` (no persisted player state; restart on login).
-- `instanced` — procedurally generated per-visit with a random seed, in-memory only, destroyed on player exit, hard cap at 50 concurrent instances. Uses `generator_script` (Lua in `scripts/regions/generators/`) + `template_config_json`.
-
-Generator scripts return a JSON room layout; client-side preview applies it to a static region temporarily before deploying.
-
 ## Stations and recipes
 
 `world_interactables.station_type` tags an interactable as a crafting station (`alchemy_circle`, `forge`, `anvil`, `enchanting_altar`, etc.). Recipes in `world_recipes` declare a station type they require; portable stations (`alchemy_circle`) can be carried by mobs/players.

@@ -23,12 +23,8 @@ export default defineEventHandler(async (event) => {
   const res = await getPool().query<{
     id: string
     name: string
-    region_kind: string | null
-    generator_script: string | null
-    template_config_json: string | null
-    tutorial_steps_json: string | null
   }>(
-    `select id, name, region_kind, generator_script, template_config_json, tutorial_steps_json
+    `select id, name
        from world.world_regions
       where id = $1`,
     [region_id],
@@ -39,49 +35,14 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: `Region not found: ${composite}` })
   }
 
-  let generatorBody: string | null = null
-  if (region.generator_script) {
-    const root = scriptsRoot()
-    const path = join(root, region.generator_script)
-    if (existsSync(path)) {
-      generatorBody = readFileSync(path, 'utf8')
-    } else {
-      generatorBody = null
-    }
-  }
 
-  let templateConfig: unknown = null
-  if (region.template_config_json) {
-    try {
-      templateConfig = JSON.parse(region.template_config_json)
-    } catch {
-      templateConfig = { _error: 'invalid JSON' }
-    }
-  }
 
-  let tutorialSteps: unknown = null
-  if (region.tutorial_steps_json) {
-    try {
-      tutorialSteps = JSON.parse(region.tutorial_steps_json)
-    } catch {
-      tutorialSteps = { _error: 'invalid JSON' }
-    }
-  }
+
 
   return {
     region: {
       id: region.id,
       name: region.name,
-      region_kind: region.region_kind ?? 'static',
-    },
-    generator_script: region.generator_script,
-    generator_body: generatorBody,
-    template_config_json: templateConfig,
-    tutorial_steps_json: tutorialSteps,
-    preview_note: region.generator_script
-      ? generatorBody
-        ? `Generator script loaded (${generatorBody.length} chars). Preview runs at runtime when a player enters the region (C++ server calls the generator with template_config_json, rooms/exits/spawns materialize in-memory).`
-        : `Generator script '${region.generator_script}' referenced but not found on disk under MUD_SCRIPTS_PATH.`
-      : 'No generator_script set — this is a static region.',
+    }
   }
 })

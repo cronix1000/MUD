@@ -10,15 +10,6 @@ interface Region {
 
 const { data: regionsData, refresh } = await useFetch<{ rows: Region[] }>('/api/tables/world_regions')
 
-function kindColor(kind: string | null): string {
-  switch (kind) {
-    case 'instanced': return 'text-purple-300 bg-purple-900/30'
-    case 'tutorial': return 'text-amber-300 bg-amber-900/30'
-    case 'static':
-    default: return 'text-neutral-400 bg-neutral-800'
-  }
-}
-
 const showCreate = ref(false)
 const newRegion = ref({ id: '', name: '', description: '' })
 const creating = ref(false)
@@ -54,9 +45,6 @@ async function createRegion() {
     <div class="flex items-center justify-between">
       <div>
         <h2 class="text-2xl font-semibold font-mono">Regions</h2>
-        <p class="text-neutral-400 text-sm mt-1">
-          Pick a region to open its map or edit its kind (static / instanced / tutorial).
-        </p>
       </div>
       <button class="px-3 py-1.5 rounded bg-emerald-700 hover:bg-emerald-600 text-sm" @click="showCreate = true">+ New region</button>
     </div>
@@ -75,7 +63,7 @@ async function createRegion() {
       class="font-mono text-sm hover:underline"
       >{{ r.id }}</NuxtLink>
       <div class="flex items-start justify-between">
-        <span :class="['text-xs px-1.5 py-0.5 rounded font-mono', kindColor(r.region_kind)]">
+        <span :class="['text-xs px-1.5 py-0.5 rounded font-mono']">
           {{ r.region_kind ?? 'static' }}
         </span>
       </div>

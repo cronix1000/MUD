@@ -23,13 +23,6 @@ function isRegionActive(id: string): boolean {
   return route.path.includes(encodeURIComponent(id))
 }
 
-function kindBadge(kind: string | null): string {
-  switch (kind) {
-    case 'instanced': return 'purple'
-    case 'tutorial': return 'amber'
-    default: return 'neutral'
-  }
-}
 </script>
 
 <template>

@@ -319,6 +319,16 @@ const MIGRATIONS: Migration[] = [
       'ALTER TABLE world.world_regions ADD COLUMN IF NOT EXISTS floor_palette_json TEXT;',
     ],
   },
+    {
+    version: 18,
+    name: 'add_region_metadata',
+    sql: [
+      "ALTER TABLE world.world_regions DROP COLUMN region_kind TEXT DEFAULT 'static';",
+      'ALTER TABLE world.world_regions DROP COLUMN generator_script TEXT;',
+      'ALTER TABLE world.world_regions DROP COLUMN template_config_json TEXT;',
+      'ALTER TABLE world.world_regions DROP COLUMN tutorial_steps_json TEXT;',
+    ],
+  },
 ]
 
 export function ensureSchemas(): Promise<void> {

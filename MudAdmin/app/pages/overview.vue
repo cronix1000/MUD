@@ -4,8 +4,6 @@ definePageMeta({ layout: 'admin' })
 interface Stats {
   regions: number
   regions_static: number
-  regions_instanced: number
-  regions_tutorial: number
   rooms: number
   exits: number
   spawns: number
@@ -49,14 +47,6 @@ const totals = computed(() => [
   { label: 'Players', value: stats.value?.players ?? 0, href: '/player_players', color: 'text-sky-300' },
 ])
 
-const regionsByKind = computed(() => {
-  const counts = { static: 0, instanced: 0, tutorial: 0 }
-  for (const r of regions.value) {
-    const k = (r.region_kind ?? 'static') as keyof typeof counts
-    if (counts[k] !== undefined) counts[k]++
-  }
-  return counts
-})
 
 function refresh() { refreshStats() }
 </script>
@@ -92,23 +82,6 @@ function refresh() { refreshStats() }
       </div>
     </div>
 
-    <div class="bg-neutral-900 border border-neutral-800 rounded p-4">
-      <h3 class="text-sm font-semibold mb-3">Regions by kind</h3>
-      <div class="flex gap-4">
-        <div class="flex-1">
-          <div class="text-xs text-neutral-400 mb-1">Static</div>
-          <div class="text-2xl font-mono">{{ regionsByKind.static }}</div>
-        </div>
-        <div class="flex-1">
-          <div class="text-xs text-purple-300 mb-1">Instanced</div>
-          <div class="text-2xl font-mono text-purple-300">{{ regionsByKind.instanced }}</div>
-        </div>
-        <div class="flex-1">
-          <div class="text-xs text-amber-300 mb-1">Tutorial</div>
-          <div class="text-2xl font-mono text-amber-300">{{ regionsByKind.tutorial }}</div>
-        </div>
-      </div>
-    </div>
 
     <div class="bg-neutral-900 border border-neutral-800 rounded p-4">
       <h3 class="text-sm font-semibold mb-3">Regions ({{ regions.length }})</h3>
@@ -122,14 +95,6 @@ function refresh() { refreshStats() }
         >
           <div class="flex items-center justify-between">
             <div class="font-mono text-sm">{{ r.id }}</div>
-            <span
-              v-if="r.region_kind && r.region_kind !== 'static'"
-              class="text-[10px] px-1 rounded font-mono"
-              :class="{
-                'bg-purple-900/40 text-purple-300': r.region_kind === 'instanced',
-                'bg-amber-900/40 text-amber-300': r.region_kind === 'tutorial',
-              }"
-            >{{ r.region_kind }}</span>
           </div>
           <div class="text-neutral-400 text-xs mt-1">{{ r.name }}</div>
         </NuxtLink>

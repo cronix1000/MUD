@@ -10,9 +10,6 @@ export default defineEventHandler(async () => {
   return {
     regions: await count(`select count(*) as c from world.world_regions`),
     regions_static: await count(`select count(*) as c from world.world_regions where region_kind = 'static' or region_kind is null`),
-    regions_instanced: await count(`select count(*) as c from world.world_regions where region_kind = 'instanced'`),
-    regions_tutorial: await count(`select count(*) as c from world.world_regions where region_kind = 'tutorial'`),
-    rooms: await count(`select count(*) as c from world.world_rooms`),
     exits: await count(`select count(*) as c from world.world_room_exits`),
     spawns: await count(`select count(*) as c from world.world_room_spawns`),
     mobs: await count(`select count(*) as c from world.world_mobs`),
