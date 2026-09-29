@@ -177,9 +177,9 @@ export default defineEventHandler(async () => {
       if (existingRegion.rowCount === 0) {
         await client.query(
           `insert into world.world_regions
-             (id, name, description, region_kind, floor_tribe, floor_index,
+             (id, name, description, floor_tribe, floor_index,
               biome_theme, floor_palette_json)
-           values ($1, $2, $3, 'static', $4, $5, $6, $7)`,
+           values ($1, $2, $3, $4, $5, $6, $7)`,
           [
             palette.region_id,
             palette.region_id.replace(/^floor\d_/, '').replace(/_/g, ' '),

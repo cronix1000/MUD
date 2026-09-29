@@ -6,7 +6,7 @@ interface RoomRow { region_id: string; room_id: number; name: string }
 export default defineEventHandler(async () => {
   const pool = getPool()
   const [regionsR, roomsR] = await Promise.all([
-    pool.query<RegionRow>(`select id, name, region_kind from world.world_regions order by id asc`),
+    pool.query<RegionRow>(`select id, name from world.world_regions order by id asc`),
     pool.query<RoomRow>(`select region_id, room_id, name from world.world_rooms order by room_id asc`),
   ])
   const regions = regionsR.rows

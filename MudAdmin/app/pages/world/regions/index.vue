@@ -5,7 +5,6 @@ interface Region {
   id: string
   name: string
   description: string | null
-  region_kind: string | null
 }
 
 const { data: regionsData, refresh } = await useFetch<{ rows: Region[] }>('/api/tables/world_regions')
@@ -63,9 +62,6 @@ async function createRegion() {
       class="font-mono text-sm hover:underline"
       >{{ r.id }}</NuxtLink>
       <div class="flex items-start justify-between">
-        <span :class="['text-xs px-1.5 py-0.5 rounded font-mono']">
-          {{ r.region_kind ?? 'static' }}
-        </span>
       </div>
       <NuxtLink
           :to="`/world/regions/${encodeURIComponent(r.id)}/map`"
@@ -80,10 +76,6 @@ async function createRegion() {
             class="text-sky-400 hover:underline"
           >map</NuxtLink>
           <span class="text-neutral-700">·</span>
-          <NuxtLink
-            :to="`/world/regions/${encodeURIComponent(r.id)}`"
-            class="text-sky-400 hover:underline"
-          >edit kind</NuxtLink>
         </div>
       </div>
       <div v-if="!regionsData?.rows.length" class="text-neutral-500 col-span-full">

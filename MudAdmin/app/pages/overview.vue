@@ -22,7 +22,6 @@ interface Stats {
 interface Region {
   id: string
   name: string
-  region_kind: string | null
 }
 
 const { data: stats, refresh: refreshStats } = await useFetch<Stats>('/api/overview/stats')

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 interface TreeRoom { room_id: number; name: string }
-interface TreeRegion { id: string; name: string; region_kind: string | null; rooms: TreeRoom[] }
+interface TreeRegion { id: string; name: string| null; rooms: TreeRoom[] }
 
 const route = useRoute()
 const { data, refresh } = await useFetch<{ regions: TreeRegion[] }>('/api/nav/tree')
@@ -38,14 +38,6 @@ function isRegionActive(id: string): boolean {
             class="font-mono truncate"
             :class="isRegionActive(r.id) ? 'text-emerald-300' : 'text-neutral-300'"
           >{{ r.id }}</span>
-          <span
-            v-if="r.region_kind && r.region_kind !== 'static'"
-            class="text-[10px] px-1 rounded font-mono"
-            :class="{
-              'bg-purple-900/40 text-purple-300': kindBadge(r.region_kind) === 'purple',
-              'bg-amber-900/40 text-amber-300': kindBadge(r.region_kind) === 'amber',
-            }"
-          >{{ r.region_kind }}</span>
           <span class="text-neutral-500 text-xs ml-auto">{{ r.rooms.length }}r</span>
         </button>
         <NuxtLink
