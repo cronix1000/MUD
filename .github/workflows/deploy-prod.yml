@@ -2,11 +2,6 @@ name: deploy-prod
 
 on:
   workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Image tag to deploy (default: latest)'
-        required: false
-        default: 'latest'
   push:
     branches: [main]
     paths:
@@ -48,16 +43,11 @@ jobs:
         run: |
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          # Normalise CRLF -> LF and trim trailing whitespace, in case the
-          # secret was pasted with Windows line endings.
           printf '%s\n' "${{ secrets.PROD_SSH_KEY }}" \
             | tr -d '\r' \
             | sed 's/[[:space:]]*$//' \
             > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          # If the secret is missing the PEM headers (some paste handlers
-          # strip them), reconstruct them. A bare base64 ed25519 key is
-          # exactly 341 bytes without the BEGIN/END lines.
           if ! grep -q 'BEGIN OPENSSH PRIVATE KEY' ~/.ssh/deploy_key; then
             echo "secret is missing PEM headers, wrapping"
             {
@@ -68,9 +58,6 @@ jobs:
             mv ~/.ssh/deploy_key.tmp ~/.ssh/deploy_key
           fi
           chmod 600 ~/.ssh/deploy_key
-          wc -c ~/.ssh/deploy_key
-          head -c 6 ~/.ssh/deploy_key | od -An -c | head -1
-          tail -c 6 ~/.ssh/deploy_key | od -An -c | head -1
           ssh-keygen -lf ~/.ssh/deploy_key || { echo "key invalid"; exit 1; }
 
       - name: Deploy
@@ -78,7 +65,7 @@ jobs:
           ssh -o StrictHostKeyChecking=no \
               -i ~/.ssh/deploy_key \
               ${{ secrets.PROD_USER }}@${{ secrets.PROD_HOST }} \
-              "bash -s -- prod ${{ inputs.tag || 'prod' }}" \
+              "bash -s" \
               < scripts/deploy-remote.sh
 
       - name: Notify

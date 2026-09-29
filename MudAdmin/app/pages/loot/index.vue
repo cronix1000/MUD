@@ -21,7 +21,7 @@ const { data } = await useFetch<{ rows: LootTableRow[] }>(`/api/tables/world_loo
       <NuxtLink
         v-for="t in data?.rows"
         :key="t.table_id"
-        :to="`/admin/loot/${encodeURIComponent(t.table_id)}`"
+        :to="`/loot/${encodeURIComponent(t.table_id)}`"
         class="block p-4 rounded border border-neutral-800 hover:border-neutral-600 bg-neutral-900"
       >
         <div class="font-mono text-sm">{{ t.table_id }}</div>

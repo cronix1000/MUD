@@ -214,7 +214,7 @@ async function previewInstance() {
 }
 
 function openMap() {
-  navigateTo(`/admin/world/regions/${encodeURIComponent(compositeKey.value)}/map`)
+  navigateTo(`/world/regions/${encodeURIComponent(compositeKey.value)}/map`)
 }
 </script>
 
@@ -223,7 +223,7 @@ function openMap() {
   <div v-else class="space-y-4 max-w-3xl">
     <div class="flex items-center justify-between gap-3">
       <div class="flex items-center gap-3">
-        <NuxtLink to="/admin/world/regions" class="text-sky-400 hover:underline text-sm">← regions</NuxtLink>
+        <NuxtLink to="/world/regions" class="text-sky-400 hover:underline text-sm">← regions</NuxtLink>
         <h2 class="text-xl font-semibold font-mono">{{ region.id }}</h2>
       </div>
       <div class="flex gap-2">
@@ -372,7 +372,7 @@ function openMap() {
           <p class="text-xs text-neutral-500 mt-1">
             JSON array of terrain tiles. The C++ server uses this palette for rooms in
             <code>{{ region.id }}</code>; symbols not listed fall back to the global
-            <NuxtLink to="/admin/world/terrains" class="text-sky-400 hover:underline">world_terrains</NuxtLink>.
+            <NuxtLink to="/world/terrains" class="text-sky-400 hover:underline">world_terrains</NuxtLink>.
           </p>
         </div>
         <button

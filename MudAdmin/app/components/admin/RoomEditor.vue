@@ -563,7 +563,7 @@ const unrecognizedInLayout = computed(() => {
           >fill all with "{{ draft.terrain || '·' }}"</button>
           <span class="text-xs text-neutral-500">·</span>
           <NuxtLink
-            to="/admin/world/terrains"
+            to="/world/terrains"
             class="text-xs text-sky-400 hover:underline"
             title="Add or edit tiles"
           >+ add tile to palette ↗</NuxtLink>
@@ -577,7 +577,7 @@ const unrecognizedInLayout = computed(() => {
           @update:layout="(rows) => draft.layout = rows"
         />
         <div v-if="unrecognizedInLayout.length" class="text-xs text-amber-400">
-          Unrecognized symbols: {{ unrecognizedInLayout.join(' ') }} — add them in <NuxtLink to="/admin/world/terrains" class="underline">Palette</NuxtLink>.
+          Unrecognized symbols: {{ unrecognizedInLayout.join(' ') }} — add them in <NuxtLink to="/world/terrains" class="underline">Palette</NuxtLink>.
         </div>
       </div>
     </div>
@@ -589,7 +589,7 @@ const unrecognizedInLayout = computed(() => {
           {{ neighborInfo.outgoing.length }} exits out · {{ neighborInfo.incoming.length }} entries in · {{ currentSpawns.length }} spawns · {{ mapLayout.length }} rooms in region.
         </div>
         <a
-          :href="`/admin/world/regions/${encodeURIComponent(regionId)}/map`"
+          :href="`/world/regions/${encodeURIComponent(regionId)}/map`"
           target="_blank"
           class="text-sky-400 hover:underline text-sm"
         >
@@ -626,7 +626,7 @@ const unrecognizedInLayout = computed(() => {
             <template v-for="n in mapLayout" :key="n.room.room_id">
               <NuxtLink
                 v-if="n.room.room_id !== roomId"
-                :to="`/admin/world_rooms/${encodeURIComponent(encodeCompositeKey('world_rooms', { region_id: n.room.region_id, room_id: n.room.room_id } as Record<string, unknown>))}`"
+                :to="`/world_rooms/${encodeURIComponent(encodeCompositeKey('world_rooms', { region_id: n.room.region_id, room_id: n.room.room_id } as Record<string, unknown>))}`"
               >
                 <rect
                   :x="mapViewBox.ox + n.x * MAP_NODE_W + 3"

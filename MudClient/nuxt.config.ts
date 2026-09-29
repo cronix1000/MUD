@@ -42,6 +42,7 @@ export default defineNuxtConfig({
           'cache-control': 'public, max-age=31536000, immutable'
         }
       }
-    }
+    },
+    errorHandler: 'text/plain'
   }
 })

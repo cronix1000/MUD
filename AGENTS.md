@@ -27,10 +27,14 @@ The C++ server (`ModularMudServer`) is intentionally **excluded from npm workspa
 | Typecheck client  | `npm run typecheck:client`       |
 | Build C++ server  | see `ModularMudServer/AGENTS.md` |
 | Bring up Postgres | `docker compose -f docker/postgresql/docker-compose.yml up -d postgres` |
-| Deploy prod stack | `TAG=prod REGISTRY=ghcr.io/cronix1000 docker compose --profile prod --profile beta up -d` |
-| Deploy beta stack | `TAG=beta REGISTRY=ghcr.io/cronix1000 docker compose --profile prod --profile beta up -d` |
+| Deploy prod       | push to `main`; CI builds `:prod` images, `scripts/deploy-remote.sh` runs on the VPS |
 
-Both deploy commands bring up **both** profiles because the prod Caddy is the sole HTTPS terminator on host `:443`/`:80` and serves both `tower-mud.unlrealities.ca` and `beta-tower-mud.unlrealities.ca` (see `docker/Caddyfile`). There is no `caddy-beta`; beta app containers reach the host Caddy through the shared `mud-net-beta` network.
+Pushing to `main` triggers `.github/workflows/build.yml` (builds four images, tags them `:prod`, pushes to GHCR) and then `.github/workflows/deploy-prod.yml` (calls `scripts/deploy-remote.sh` over SSH). The host Caddy serves two hostnames from `:443`/`:80`:
+
+- `tower-mud.unlrealities.ca`   → `MudClient`
+- `tower-admin.unlrealities.ca` → `MudAdmin`
+
+Each app sits at the root of its own origin — no URL prefix, no `baseURL`, no `buildAssetsDir` hack. Add both admin hostnames as DNS A/AAAA records pointing at the VPS. Caddy auto-issues Let's Encrypt certs on first request.
 
 `MudAdmin` has no `typecheck` script — its `npm run build` is the canonical compile + typecheck gate. Run `npm run build:admin` from the repo root.
 
@@ -49,7 +53,7 @@ The legacy SQLite files (`mud.world.db`, `mud.players.db`) exist only as a trans
 - During the cutover, `scripts/sqlite-to-pg.mjs` reads them once and bulk-loads the rows into the `world.*` / `players.player_*` tables.
 - After 30 days of clean operation, delete them.
 
-The Postgres service lives in `docker/postgresql/docker-compose.yml` (included from the root compose). It bootstraps two roles (`mud_prod`, `mud_beta`) and two databases on first boot, with passwords read from `docker/postgresql/pg.env`.
+The Postgres service lives in `docker/postgresql/docker-compose.yml` (included from the root compose). It bootstraps a single role (`mud_prod`) and database on first boot, with the password read from `docker/postgresql/pg.env`.
 
 ### Production conn strings — Pattern 1 (env file on disk)
 
@@ -58,40 +62,34 @@ This repo uses **Pattern 1**: secrets live in env files on the host (`docker/.en
 | Consumer | URL source |
 |---|---|
 | `mud-server.exe` (local dev, F5) | `ModularMudServer.vcxproj.user` → `<LocalDebuggerEnvironment>` |
-| `mud-server.exe` (deployed prod) | `docker-compose.yml` reads `MUD_DATABASE_URL_PROD` from `docker/.env` |
-| `mud-server-beta` (deployed beta) | `docker-compose.yml` reads `MUD_DATABASE_URL_BETA` from `docker/.env` |
+| `mud-server` (deployed prod) | `docker-compose.yml` reads `MUD_DATABASE_URL` from `docker/.env` |
 | `MudAdmin` (local dev) | `MudAdmin/.env` → `MUD_DATABASE_URL` |
-| `mud-admin` (deployed prod) | `docker-compose.yml` reads `MUD_DATABASE_URL_PROD` |
-| `mud-admin-beta` (deployed beta) | `docker-compose.yml` reads `MUD_DATABASE_URL_BETA` |
+| `mud-admin` (deployed prod) | `docker-compose.yml` reads `MUD_DATABASE_URL` |
 
 Canonical URL shapes (no `?options=...` segment — `ModularMudServer/PostgresDatabase.cpp:51-66` and `MudAdmin/server/utils/db.ts:43-52` set `search_path` per-connect, and the role default is set by `docker/postgresql/init/00-bootstrap.sh:60-61`):
 
 ```
 # Local dev (Windows + SSH tunnel)
-postgresql://mud_beta:<pw>@127.0.0.1:5432/mud_beta
+postgresql://mud_prod:<pw>@127.0.0.1:5432/mud_prod
 
-# Beta on the VPS — the postgres container_name is `mud-postgres` and
-# it sits on both `mud-net` and `mud-net-beta` (connected manually).
-postgresql://mud_beta:<pw>@mud-postgres:5432/mud_beta
-
-# Prod on the VPS
+# Prod on the VPS — the postgres container_name is `mud-postgres`
 postgresql://mud_prod:<pw>@mud-postgres:5432/mud_prod
 ```
 
 If you ever need options in a URL for a non-app consumer (psql, ETL), use `+` instead of `%20` for spaces — libpq doesn't decode `%20` inside `?options=...`:
 
 ```
-postgresql://mud_beta:<pw>@127.0.0.1:5432/mud_beta?options=-c+search_path=world,players,_meta,public
+postgresql://mud_prod:<pw>@127.0.0.1:5432/mud_prod?options=-c+search_path=world,players,_meta,public
 ```
 
 **Rotation procedure:**
-1. Edit `docker/postgresql/pg.env` on the VPS, set new `MUD_PROD_PASSWORD` (or `MUD_BETA_PASSWORD`).
+1. Edit `docker/postgresql/pg.env` on the VPS, set new `MUD_PROD_PASSWORD`.
 2. `cd ~/postgre && docker compose restart postgres` to load the new password.
-3. `cd ~/MUD && TAG=prod REGISTRY=ghcr.io/cronix1000 docker compose --profile prod --profile beta up -d --force-recreate mud-server mud-admin mud-server-beta mud-admin-beta` to pick up the new `docker/.env` value.
+3. `cd ~/MUD && docker compose up -d --force-recreate mud-server mud-admin` to pick up the new `docker/.env` value.
 4. Smoke: `docker logs --tail=20 mud-server | grep "Connected (search_path="`.
 
 **Out of scope for now (deliberate tech debt):**
-- Per-role unique passwords (currently `super_mud_pass_1` is reused across `mud_prod`, `mud_beta`, and `POSTGRES_PASSWORD`). When Pattern 1 starts feeling cramped (3+ environments, ops team, compliance ask), promote to Pattern 2 (distinct passwords per role), then Pattern 3 (docker secrets / Vault).
+- Per-role unique passwords (currently `super_mud_pass_1` is reused across `mud_prod` and `POSTGRES_PASSWORD`). When Pattern 1 starts feeling cramped (3+ environments, ops team, compliance ask), promote to Pattern 2 (distinct passwords per role), then Pattern 3 (docker secrets / Vault).
 - Auto-rotation. Manual for now.
 
 ### Local development DB access
@@ -99,7 +97,7 @@ postgresql://mud_beta:<pw>@127.0.0.1:5432/mud_beta?options=-c+search_path=world,
 `mud-server.exe` runs on a Windows host and reaches the VPS Postgres through an SSH tunnel (host loopback `127.0.0.1:5432`). Full procedure, including the firewall/rationale, is in `scripts/postgres-connection.md`. The two things that bite newcomers most:
 
 1. `mud-server.exe` issues `SET search_path TO world, players, _meta, public` itself on every connect (`ModularMudServer/PostgresDatabase.cpp:54-58`). MudAdmin's pool does the same on each new client (`MudAdmin/server/utils/db.ts:47-50`). The role default is set by `docker/postgresql/init/00-bootstrap.sh` for fresh volumes and `01-search-path.sh` for existing ones. **None of the three need URL `?options=...`**. Note: when both URL options and the C++/admin `SET` are present, the per-session URL option wins — so URLs should NOT include `?options=-c%20search_path=...`.
-2. Point the dev tunnel at `mud_beta`, not `mud_prod`. Beta is a QA mirror; admin edits against prod hit live player data. `scripts/pg-sync-prod-to-beta.sh` mirrors prod world content into beta.
+2. The dev tunnel points at the prod database. Take a snapshot (`/admin/snapshots`) before destructive experimentation.
 
 A template URL lives in `ModularMudServer/.env.example`.
 

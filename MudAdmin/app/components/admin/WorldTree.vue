@@ -13,11 +13,11 @@ function toggleRegion(id: string) {
 }
 
 const roomHref = (r: string, id: number) =>
-  `/admin/world_rooms/${encodeURIComponent(r + '::' + id)}`
+  `/world_rooms/${encodeURIComponent(r + '::' + id)}`
 const regionHref = (id: string) =>
-  `/admin/world/regions/${encodeURIComponent(id)}`
+  `/world/regions/${encodeURIComponent(id)}`
 const mapHref = (id: string) =>
-  `/admin/world/regions/${encodeURIComponent(id)}/map`
+  `/world/regions/${encodeURIComponent(id)}/map`
 
 function isRegionActive(id: string): boolean {
   return route.path.includes(encodeURIComponent(id))

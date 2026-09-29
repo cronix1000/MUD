@@ -83,7 +83,7 @@ async function save() {
   <div v-else class="space-y-4 max-w-3xl">
     <div class="flex items-center justify-between gap-3">
       <div class="flex items-center gap-3">
-        <NuxtLink to="/admin/world_loot_tables" class="text-sky-400 hover:underline text-sm">← loot_tables</NuxtLink>
+        <NuxtLink to="/world_loot_tables" class="text-sky-400 hover:underline text-sm">← loot_tables</NuxtLink>
         <h2 class="text-xl font-semibold font-mono">{{ table.table_id }}</h2>
       </div>
       <button class="px-3 py-1.5 rounded bg-emerald-700 hover:bg-emerald-600 text-sm disabled:opacity-50" :disabled="saving" @click="save">
@@ -140,7 +140,7 @@ async function save() {
       <h3 class="text-sm font-semibold mb-2">Linked from mobs</h3>
       <ul class="text-sm space-y-1">
         <li v-for="m in linkedMobs" :key="m.template_id" class="font-mono">
-          <NuxtLink :to="`/admin/world_mobs/${encodeURIComponent(m.template_id)}`" class="text-sky-400 hover:underline">{{ m.template_id }}</NuxtLink>
+          <NuxtLink :to="`/world_mobs/${encodeURIComponent(m.template_id)}`" class="text-sky-400 hover:underline">{{ m.template_id }}</NuxtLink>
           <span class="text-neutral-400 ml-2">{{ m.name }}</span>
         </li>
       </ul>

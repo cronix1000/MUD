@@ -71,7 +71,7 @@ async function createRegion() {
       class="block p-4 rounded border border-neutral-800 hover:border-neutral-600 bg-neutral-900"
       >
       <NuxtLink
-      :to="`/admin/world/regions/${encodeURIComponent(r.id)}`"
+      :to="`/world/regions/${encodeURIComponent(r.id)}`"
       class="font-mono text-sm hover:underline"
       >{{ r.id }}</NuxtLink>
       <div class="flex items-start justify-between">
@@ -80,7 +80,7 @@ async function createRegion() {
         </span>
       </div>
       <NuxtLink
-          :to="`/admin/world/regions/${encodeURIComponent(r.id)}/map`"
+          :to="`/world/regions/${encodeURIComponent(r.id)}/map`"
           class="text-sky-400 hover:underline"
         >
         <div class="text-neutral-400 text-xs mt-1">&nbsp;</div>
@@ -88,12 +88,12 @@ async function createRegion() {
         <div v-if="r.description" class="text-neutral-300 text-sm mt-2">{{ r.description }}</div>
         <div class="mt-3 flex gap-2 text-xs">
           <NuxtLink
-            :to="`/admin/world/regions/${encodeURIComponent(r.id)}/map`"
+            :to="`/world/regions/${encodeURIComponent(r.id)}/map`"
             class="text-sky-400 hover:underline"
           >map</NuxtLink>
           <span class="text-neutral-700">·</span>
           <NuxtLink
-            :to="`/admin/world/regions/${encodeURIComponent(r.id)}`"
+            :to="`/world/regions/${encodeURIComponent(r.id)}`"
             class="text-sky-400 hover:underline"
           >edit kind</NuxtLink>
         </div>

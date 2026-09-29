@@ -1,5 +1,12 @@
 # Deploy runbook
 
+> **Note:** This runbook is stale. The current deployment is documented in
+> [`AGENTS.md`](AGENTS.md). The deploys run on a single VPS hosting one
+> `docker-compose.yml` (no profiles). The `:prod` images built by
+> `.github/workflows/build.yml` are pulled and started by
+> `scripts/deploy-remote.sh`, invoked from `.github/workflows/deploy-prod.yml`
+> on every push to `main`. Beta profiles/hostnames/services no longer exist.
+
 Two production-grade Linux hosts. Each runs the **same** `docker-compose.yml`
 under a different profile (`prod` or `beta`). GitHub Actions builds the
 images, then deploys them via SSH. **prod and beta live on different

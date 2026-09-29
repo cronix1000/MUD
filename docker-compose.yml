@@ -1,24 +1,14 @@
-# docker-compose for the MUD. Two profiles:
+# docker-compose for the MUD. Single profile:
 #
-#   docker compose --profile prod up
-#   docker compose --profile beta up
+#   docker compose up -d
 #
-# Only one profile should be active on a given host at a time. The `prod`
-# profile uses tag :prod; the beta profile uses tag :beta. They share
-# the same images but bind to different ports + different DB databases.
-#
-# Set the image tag at deploy time:
-#   TAG=beta docker compose --profile beta pull
-#   TAG=beta docker compose --profile beta up -d
-#
-# Or build locally with:
-#   TAG=dev docker compose --profile prod build
+# Build and push images with the build workflow on push to main:
+# images are tagged :prod and pulled by this compose file by default.
 #
 # Postgres: this stack assumes an existing Postgres reachable on the
-# `mud-net` (prod) and `mud-net-beta` (beta) docker networks. The
-# MUD containers connect via MUD_DATABASE_URL_PROD / MUD_DATABASE_URL_BETA.
-# The bundled Postgres compose at docker/postgresql/ is kept for local dev
-# but is no longer included in prod/beta deploys.
+# `mud-net` docker network. The MUD containers connect via
+# MUD_DATABASE_URL. The bundled Postgres compose at docker/postgresql/
+# is kept for local dev but is no longer included in prod deploys.
 
 name: mud
 
@@ -46,22 +36,16 @@ volumes:
 networks:
   mud-net:
     name: mud-net
-  mud-net-beta:
-    name: mud-net-beta
 
 services:
 
-  # ============================================================
-  # prod profile
-  # ============================================================
   mud-server:
     <<: *server-base
-    profiles: ["prod"]
     image: ${REGISTRY:-ghcr.io/cronix1000}/mud-server:${TAG:-prod}
     container_name: mud-server
     hostname: mud-server
     environment:
-      MUD_DATABASE_URL: ${MUD_DATABASE_URL_PROD:?MUD_DATABASE_URL_PROD must be set in .env}
+      MUD_DATABASE_URL: ${MUD_DATABASE_URL:?MUD_DATABASE_URL must be set in .env}
       PORT: 27015
       TZ: ${TZ:-UTC}
     networks:
@@ -71,7 +55,6 @@ services:
 
   mud-gateway:
     <<: *gateway-base
-    profiles: ["prod"]
     image: ${REGISTRY:-ghcr.io/cronix1000}/mud-gateway:${TAG:-prod}
     container_name: mud-gateway
     hostname: mud-gateway
@@ -88,13 +71,12 @@ services:
       - "${GATEWAY_PORT:-8443}:8443"
 
   mud-admin:
-    profiles: ["prod"]
     image: ${REGISTRY:-ghcr.io/cronix1000}/mud-admin:${TAG:-prod}
     container_name: mud-admin
     hostname: mud-admin
     restart: unless-stopped
     environment:
-      MUD_DATABASE_URL: ${MUD_DATABASE_URL_PROD:?MUD_DATABASE_URL_PROD must be set in .env}
+      MUD_DATABASE_URL: ${MUD_DATABASE_URL:?MUD_DATABASE_URL must be set in .env}
       HOST: 0.0.0.0
       PORT: 3000
     networks:
@@ -103,7 +85,6 @@ services:
       - "3000"
 
   mud-client:
-    profiles: ["prod"]
     image: ${REGISTRY:-ghcr.io/cronix1000}/mud-client:${TAG:-prod}
     container_name: mud-client
     hostname: mud-client
@@ -111,14 +92,13 @@ services:
     environment:
       HOST: 0.0.0.0
       PORT: 3001
-      MUD_DATABASE_URL: ${MUD_DATABASE_URL_PROD:?MUD_DATABASE_URL_PROD must be set in .env}
+      MUD_DATABASE_URL: ${MUD_DATABASE_URL:?MUD_DATABASE_URL must be set in .env}
     networks:
       - mud-net
     expose:
       - "3001"
 
   caddy:
-    profiles: ["prod"]
     image: caddy:2-alpine
     container_name: mud-caddy
     restart: unless-stopped
@@ -131,82 +111,3 @@ services:
       - caddy-config:/config
     networks:
       - mud-net
-      - mud-net-beta
-
-  # ============================================================
-  # beta profile  (separate volume, different external ports)
-  # ============================================================
-  mud-server-beta:
-    <<: *server-base
-    profiles: ["beta"]
-    image: ${REGISTRY:-ghcr.io/cronix1000}/mud-server:${TAG:-beta}
-    container_name: mud-server-beta
-    hostname: mud-server-beta
-    environment:
-      MUD_DATABASE_URL: ${MUD_DATABASE_URL_BETA:?MUD_DATABASE_URL_BETA must be set in .env}
-      PORT: 27015
-      TZ: ${TZ:-UTC}
-    networks:
-      - mud-net-beta
-    expose:
-      - "27015"
-
-  mud-gateway-beta:
-    <<: *gateway-base
-    profiles: ["beta"]
-    image: ${REGISTRY:-ghcr.io/cronix1000}/mud-gateway:${TAG:-beta}
-    container_name: mud-gateway-beta
-    hostname: mud-gateway-beta
-    environment:
-      MUD_HOST: mud-server-beta
-      MUD_PORT: 27015
-      WS_HOST: 0.0.0.0
-      WS_PORT: 8443
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      IDLE_TIMEOUT_S: ${IDLE_TIMEOUT_S:-1800}
-    networks:
-      - mud-net-beta
-    expose:
-      - "8443"
-
-  mud-admin-beta:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.web
-      args:
-        APP: MudAdmin
-    image: ${REGISTRY:-ghcr.io/cronix1000}/mud-admin:${TAG:-beta}
-    container_name: mud-admin-beta
-    hostname: mud-admin-beta
-    profiles: ["beta"]
-    restart: unless-stopped
-    environment:
-      MUD_DATABASE_URL: ${MUD_DATABASE_URL_BETA:?MUD_DATABASE_URL_BETA must be set in .env}
-      HOST: 0.0.0.0
-      PORT: 3000
-    networks:
-      - mud-net-beta
-    expose:
-      - "3000"
-
-  mud-client-beta:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.web
-      args:
-        APP: mudclient
-        WS_URL: ${BETA_WS_URL:-<lan-host>:18080/ws}
-    image: ${REGISTRY:-ghcr.io/cronix1000}/mud-client:${TAG:-beta}
-    container_name: mud-client-beta
-    hostname: mud-client-beta
-    profiles: ["beta"]
-    restart: unless-stopped
-    environment:
-      HOST: 0.0.0.0
-      PORT: 3001
-      MUD_DATABASE_URL: ${MUD_DATABASE_URL_BETA:?MUD_DATABASE_URL_BETA must be set in .env}
-    networks:
-      - mud-net-beta
-    expose:
-      - "3001"
-

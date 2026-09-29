@@ -87,7 +87,7 @@ async function deleteRecipe(r: RecipeRow) {
             <td class="px-3 py-2">{{ r.experience_gain }}</td>
             <td class="px-3 py-2">{{ r.is_auto_learned ? 'yes' : 'no' }}</td>
             <td class="px-3 py-2 text-right">
-              <NuxtLink :to="`/admin/recipes/${encodeURIComponent(r.recipe_id)}`" class="text-sky-400 hover:underline mr-3 text-sm">edit</NuxtLink>
+              <NuxtLink :to="`/recipes/${encodeURIComponent(r.recipe_id)}`" class="text-sky-400 hover:underline mr-3 text-sm">edit</NuxtLink>
               <button class="text-red-400 hover:underline text-sm" @click="deleteRecipe(r)">delete</button>
             </td>
           </tr>

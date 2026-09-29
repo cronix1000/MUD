@@ -119,6 +119,6 @@ Then change Postgres `ports:` to `"5432:5432"` (bind on `0.0.0.0`). On Windows,
 ## Still pending (separate work)
 
 - `wiki/` credentials still in git history. Recommend `git filter-repo --invert-paths --path wiki/` + force-push, then rotate all DB passwords.
-- `super_mud_pass_1` is reused across `POSTGRES_PASSWORD`, `MUD_PROD_PASSWORD`, `MUD_BETA_PASSWORD`, and `mud_prod`/`mud_beta` role passwords. Rotate to distinct values per role after cutover.
+- `super_mud_pass_1` is reused across `POSTGRES_PASSWORD` and `MUD_PROD_PASSWORD`/`mud_prod` role password. Rotate to distinct values per role after cutover.
 - PR 5 doc cleanup (`ModularMudServer/AGENTS.md` SQLite->libpqxx mentions; root `AGENTS.md` consistency).
 - Deprecate the repo's `~/MUD/docker/postgresql/docker-compose.yml` (the canonical install now lives at `~/postgre/` on the VPS).

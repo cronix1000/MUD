@@ -191,7 +191,7 @@ function validateLayouts() {
         <p class="text-neutral-400 text-sm mt-1">
           Global fallback tiles used in room layouts.
           Each region may override these on the
-          <NuxtLink to="/admin/world/regions" class="text-sky-400 hover:underline">region editor</NuxtLink>
+          <NuxtLink to="/world/regions" class="text-sky-400 hover:underline">region editor</NuxtLink>
           via <code>floor_palette_json</code>.
         </p>
       </div>
@@ -346,7 +346,7 @@ function validateLayouts() {
       <div v-if="!validationResults.length" class="text-emerald-400 text-sm">All layouts look good.</div>
       <ul v-else class="space-y-2">
         <li v-for="r in validationResults" :key="r.room_id" class="border-l-2 border-amber-600 pl-3 text-sm">
-          <NuxtLink :to="`/admin/world_rooms/${encodeURIComponent('floor1::' + r.room_id)}`" class="text-sky-400 hover:underline font-mono">#{{ r.room_id }} {{ r.name }}</NuxtLink>
+          <NuxtLink :to="`/world_rooms/${encodeURIComponent('floor1::' + r.room_id)}`" class="text-sky-400 hover:underline font-mono">#{{ r.room_id }} {{ r.name }}</NuxtLink>
           <ul class="ml-4 mt-1 text-neutral-300">
             <li v-for="(iss, i) in r.issues" :key="i" class="font-mono text-xs">• {{ iss }}</li>
           </ul>
