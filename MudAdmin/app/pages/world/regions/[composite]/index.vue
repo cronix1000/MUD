@@ -154,15 +154,10 @@ const swatchStyle = (color: string) => {
   }
 }
 
-const GENERATORS = [
-  'regions/generators/cave.lua',
-  'regions/generators/dungeon.lua',
-  'regions/generators/wilderness.lua',
-]
 
 const previewing = ref(false)
 const previewData = ref<{
-  region: { name: string; region_kind: string }
+  region: { name: string; }
   preview_note: string
 } | null>(null)
 
