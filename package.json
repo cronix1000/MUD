@@ -25,12 +25,9 @@
     "db:migrate:list": "node scripts/migrate.mjs --list",
     "db:sync:prod-to-beta": "bash scripts/pg-sync-prod-to-beta.sh",
     "db:prune": "bash scripts/prune-snapshots.sh 10",
-    "deploy:prod": "TAG=latest docker compose --profile prod up -d",
-    "deploy:beta": "TAG=latest docker compose --profile beta up -d",
-    "build:images:prod": "TAG=prod REGISTRY= docker compose --profile prod build",
-    "build:images:beta": "TAG=beta REGISTRY= docker compose --profile beta build",
-    "down:prod": "docker compose --profile prod down",
-    "down:beta": "docker compose --profile beta down"
+    "deploy:prod": "docker compose up -d",
+    "build:images:prod": "docker compose build",
+    "down:prod": "docker compose down"
   },
   "engines": {
     "node": ">=20.0.0"

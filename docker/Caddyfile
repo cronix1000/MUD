@@ -2,7 +2,7 @@
     admin localhost:2019
 }
 
-# ----- prod client -----
+# ----- client -----
 https://tower-mud.unlrealities.ca {
     encode zstd gzip
 
@@ -22,45 +22,12 @@ https://tower-mud.unlrealities.ca {
     }
 }
 
-# ----- prod admin -----
+# ----- admin -----
 https://tower-admin.unlrealities.ca {
     encode zstd gzip
 
     handle {
         reverse_proxy mud-admin:3000 {
-            header_up Host {host}
-            header_up X-Real-IP {remote_host}
-            header_up X-Forwarded-Proto https
-        }
-    }
-}
-
-# ----- beta client -----
-https://beta-tower-mud.unlrealities.ca {
-    encode zstd gzip
-
-    handle /ws* {
-        reverse_proxy mud-gateway-beta:8443 {
-            header_up Host {host}
-            header_up X-Forwarded-Proto https
-        }
-    }
-
-    handle {
-        reverse_proxy mud-client-beta:3001 {
-            header_up Host {host}
-            header_up X-Real-IP {remote_host}
-            header_up X-Forwarded-Proto https
-        }
-    }
-}
-
-# ----- beta admin -----
-https://beta-tower-admin.unlrealities.ca {
-    encode zstd gzip
-
-    handle {
-        reverse_proxy mud-admin-beta:3000 {
             header_up Host {host}
             header_up X-Real-IP {remote_host}
             header_up X-Forwarded-Proto https
