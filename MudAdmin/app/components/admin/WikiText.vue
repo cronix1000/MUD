@@ -177,11 +177,12 @@ function entityDisplayName(type: EntityType, id: string): string {
     skill: id.split('::').pop() ?? id,
     recipe: id.split('::').pop() ?? id,
     interactable: id.split('::').pop() ?? id,
+    zone: id.split('::').pop() ?? id,
   }
   return map[type] ?? id
 }
 
-const knownTypes: EntityType[] = ['room', 'npc', 'mob', 'item', 'quest', 'region', 'skill', 'recipe', 'interactable']
+const knownTypes: EntityType[] = ['room', 'npc', 'mob', 'item', 'quest', 'region', 'skill', 'recipe', 'interactable', 'zone']
 
 function safeType(t: string): EntityType {
   return knownTypes.includes(t as EntityType) ? (t as EntityType) : 'item'

@@ -329,6 +329,152 @@ const MIGRATIONS: Migration[] = [
       'ALTER TABLE world.world_regions DROP COLUMN tutorial_steps_json TEXT;',
     ],
   },
+  {
+    version: 19,
+    name: 'add_room_light_and_exit_one_way',
+    sql: [
+      "ALTER TABLE world.world_rooms ADD COLUMN IF NOT EXISTS light INT NOT NULL DEFAULT 0;",
+      "COMMENT ON COLUMN world.world_rooms.light IS '0 = dark, 10 = bright';",
+    ],
+  },
+  {
+    version: 20,
+    name: 'create_factions',
+    sql: [
+      `CREATE TABLE IF NOT EXISTS world.world_factions (
+        faction_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT,
+        ideology TEXT,
+        PRIMARY KEY (faction_id)
+      );`,
+      `CREATE TABLE IF NOT EXISTS world.world_faction_relations (
+        faction_id TEXT NOT NULL,
+        other_faction_id TEXT NOT NULL,
+        base_standing INT NOT NULL DEFAULT 0,
+        PRIMARY KEY (faction_id, other_faction_id)
+      );`,
+      `CREATE TABLE IF NOT EXISTS players.player_faction_standing (
+        player_id INT NOT NULL,
+        faction_id TEXT NOT NULL,
+        standing INT NOT NULL DEFAULT 0,
+        updated_at BIGINT NOT NULL,
+        PRIMARY KEY (player_id, faction_id)
+      );`,
+    ],
+  },
+  {
+    version: 21,
+    name: 'create_player_gold_and_shops',
+    sql: [
+      "ALTER TABLE players.player_players ADD COLUMN IF NOT EXISTS gold INT NOT NULL DEFAULT 0;",
+      "ALTER TABLE players.player_players ADD COLUMN IF NOT EXISTS bank_balance INT NOT NULL DEFAULT 0;",
+      `CREATE TABLE IF NOT EXISTS world.world_shop_keeper (
+        keeper_id TEXT NOT NULL,
+        mob_id TEXT,
+        markup NUMERIC NOT NULL DEFAULT 1.0,
+        markdown NUMERIC NOT NULL DEFAULT 1.0,
+        open_hour INT DEFAULT 0,
+        close_hour INT DEFAULT 24,
+        shop_type TEXT DEFAULT 'general',
+        PRIMARY KEY (keeper_id)
+      );`,
+      `CREATE TABLE IF NOT EXISTS world.world_shop_inventory (
+        keeper_id TEXT NOT NULL,
+        template_id TEXT NOT NULL,
+        max_stock INT NOT NULL DEFAULT -1,
+        restock_seconds INT NOT NULL DEFAULT 600,
+        current_stock INT NOT NULL DEFAULT -1,
+        price_override INT,
+        PRIMARY KEY (keeper_id, template_id)
+      );`,
+    ],
+  },
+  {
+    version: 22,
+    name: 'create_mail_and_boards',
+    sql: [
+      `CREATE TABLE IF NOT EXISTS players.player_mail (
+          mail_id BIGSERIAL PRIMARY KEY,
+          from_player_id INT NOT NULL,
+          to_player_id INT NOT NULL,
+          subject TEXT NOT NULL,
+          body TEXT NOT NULL,
+          sent_at BIGINT NOT NULL,
+          read_at BIGINT,
+          folder TEXT NOT NULL DEFAULT 'inbox'
+        );`,
+      `CREATE INDEX IF NOT EXISTS idx_player_mail_to ON players.player_mail(to_player_id, folder);`,
+      `CREATE TABLE IF NOT EXISTS world.world_board (
+          board_id TEXT NOT NULL,
+          region_id TEXT,
+          name TEXT NOT NULL,
+          description TEXT,
+          max_posts INT NOT NULL DEFAULT 200,
+          read_perm INT NOT NULL DEFAULT 0,
+          write_perm INT NOT NULL DEFAULT 10,
+          PRIMARY KEY (board_id)
+        );`,
+      `CREATE TABLE IF NOT EXISTS players.player_board_post (
+          post_id BIGSERIAL PRIMARY KEY,
+          board_id TEXT NOT NULL,
+          author_id INT NOT NULL,
+          author_name TEXT NOT NULL,
+          subject TEXT NOT NULL,
+          body TEXT NOT NULL,
+          posted_at BIGINT NOT NULL
+        );`,
+    ],
+  },
+  {
+    version: 23,
+    name: 'create_classes_and_races',
+    sql: [
+      `CREATE TABLE IF NOT EXISTS world.world_classes (
+          class_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          description TEXT,
+          primary_stat TEXT,
+          hp_per_level INT NOT NULL DEFAULT 10,
+          mp_per_level INT NOT NULL DEFAULT 5,
+          PRIMARY KEY (class_id)
+        );`,
+      `CREATE TABLE IF NOT EXISTS world.world_races (
+          race_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          description TEXT,
+          str_bonus INT NOT NULL DEFAULT 0,
+          dex_bonus INT NOT NULL DEFAULT 0,
+          int_bonus INT NOT NULL DEFAULT 0,
+          con_bonus INT NOT NULL DEFAULT 0,
+          wis_bonus INT NOT NULL DEFAULT 0,
+          cha_bonus INT NOT NULL DEFAULT 0,
+          PRIMARY KEY (race_id)
+        );`,
+      "ALTER TABLE players.player_players ADD COLUMN IF NOT EXISTS class_id TEXT;",
+      "ALTER TABLE players.player_players ADD COLUMN IF NOT EXISTS race_id TEXT;",
+      "ALTER TABLE players.player_players ADD COLUMN IF NOT EXISTS level INT NOT NULL DEFAULT 1;",
+    ],
+  },
+  {
+    version: 24,
+    name: 'create_zones',
+    sql: [
+      `CREATE TABLE IF NOT EXISTS world.world_zones (
+          region_id TEXT NOT NULL,
+          zone_id INTEGER NOT NULL,
+          name TEXT NOT NULL,
+          description TEXT,
+          rules_json TEXT,
+          zone_script_ref TEXT,
+          is_active BOOLEAN NOT NULL DEFAULT TRUE,
+          created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          PRIMARY KEY (region_id, zone_id)
+        );`,
+      "ALTER TABLE world.world_rooms ADD COLUMN IF NOT EXISTS zone_id INTEGER NOT NULL DEFAULT 0;",
+      "CREATE INDEX IF NOT EXISTS world_rooms_region_zone_idx ON world.world_rooms (region_id, zone_id);",
+    ],
+  },
 ]
 
 export function ensureSchemas(): Promise<void> {
@@ -350,6 +496,116 @@ async function ensureMigrationsTable(): Promise<void> {
       note TEXT
     )`,
   )
+}
+
+async function tableExists(schema: string, table: string): Promise<boolean> {
+  const r = await getPool().query<{ exists: boolean }>(
+    `SELECT EXISTS (
+       SELECT 1 FROM information_schema.tables
+       WHERE table_schema = $1 AND table_name = $2
+     ) AS exists`,
+    [schema, table],
+  )
+  return !!r.rows[0]?.exists
+}
+
+async function columnExists(schema: string, table: string, column: string): Promise<boolean> {
+  const r = await getPool().query<{ exists: boolean }>(
+    `SELECT EXISTS (
+       SELECT 1 FROM information_schema.columns
+       WHERE table_schema = $1 AND table_name = $2 AND column_name = $3
+     ) AS exists`,
+    [schema, table, column],
+  )
+  return !!r.rows[0]?.exists
+}
+
+interface MigrationSignature {
+  table?: { schema: string; table: string }
+  column?: { schema: string; table: string; column: string }
+  revertColumn?: { schema: string; table: string; column: string }
+  alwaysApplied?: boolean
+}
+
+const SIGNATURES: Record<number, MigrationSignature> = {
+  1:  { column: { schema: 'world',    table: 'world_mobs',    column: 'dialogue_root' } },
+  2:  { table:  { schema: 'world',    table: 'world_quests' } },
+  3:  { table:  { schema: 'world',    table: 'world_quest_objectives' } },
+  4:  { table:  { schema: 'world',    table: 'world_quest_rewards' } },
+  5:  { column: { schema: 'world',    table: 'world_worlds',  column: 'symbol_width' } },
+  6:  { column: { schema: 'world',    table: 'world_regions', column: 'floor_settings_deprecated_at' } },
+  7:  { alwaysApplied: true },
+  8:  { column: { schema: 'world',    table: 'world_terrains', column: 'pattern' } },
+  9:  { alwaysApplied: true },
+  10: { column: { schema: 'world',    table: 'world_terrains', column: 'pattern' }, revertColumn: { schema: 'world', table: 'world_terrains', column: 'pattern' } },
+  11: { column: { schema: 'world',    table: 'world_regions', column: 'region_kind' } },
+  12: { table:  { schema: 'world',    table: 'world_recipes' } },
+  13: { table:  { schema: 'players',  table: 'player_known_recipes' } },
+  14: { column: { schema: 'world',    table: 'world_skills',  column: 'xp_curve' } },
+  15: { column: { schema: 'world',    table: 'world_interactables', column: 'station_type' } },
+  16: { alwaysApplied: true },
+  17: { column: { schema: 'world',    table: 'world_regions', column: 'floor_palette_json' } },
+  18: { column: { schema: 'world',    table: 'world_regions', column: 'region_kind' }, revertColumn: { schema: 'world', table: 'world_regions', column: 'region_kind' } },
+  19: { column: { schema: 'world',    table: 'world_rooms',   column: 'light' } },
+  20: { table:  { schema: 'world',    table: 'world_factions' } },
+  21: { column: { schema: 'players',  table: 'player_players', column: 'gold' } },
+  22: { table:  { schema: 'players',  table: 'player_mail' } },
+  23: { column: { schema: 'players',  table: 'player_players', column: 'level' } },
+  24: { table:  { schema: 'world',    table: 'world_zones' } },
+}
+
+async function isEffectPresent(m: Migration): Promise<boolean> {
+  const sig = SIGNATURES[m.version]
+  if (!sig) {
+    const m0010Noop = m.version === 9
+    return m0010Noop
+  }
+  if (sig.alwaysApplied) return true
+  if (sig.column) {
+    const present = await columnExists(sig.column.schema, sig.column.table, sig.column.column)
+    if (sig.revertColumn) {
+      return !present
+    }
+    return present
+  }
+  if (sig.table) {
+    return await tableExists(sig.table.schema, sig.table.table)
+  }
+  return false
+}
+
+export async function synthesizeAppliedMigrations(): Promise<{ synthesized: MigrationRecord[]; skipped: number[] }> {
+  await ensureSchemas()
+  await ensureMigrationsTable()
+  const applied = new Set((await getAppliedMigrations()).map((m) => m.version))
+  const pool = getPool()
+  const client = await pool.connect()
+  const synthesized: MigrationRecord[] = []
+  const skipped: number[] = []
+  try {
+    await client.query('begin')
+    for (const m of MIGRATIONS) {
+      if (applied.has(m.version)) {
+        skipped.push(m.version)
+        continue
+      }
+      const present = await isEffectPresent(m)
+      if (!present) continue
+      await client.query(
+        `insert into _meta._migrations (version, name, applied_at, note) values ($1, $2, $3, $4)
+         on conflict (version) do nothing`,
+        [m.version, m.name, Date.now(), 'synthesized from existing schema'],
+      )
+      synthesized.push({ version: m.version, name: m.name, applied_at: Date.now(), note: 'synthesized from existing schema' })
+    }
+    await client.query('commit')
+  } catch (e) {
+    await client.query('rollback').catch(() => {})
+    throw e
+  } finally {
+    client.release()
+  }
+  return { synthesized, skipped }
 }
 
 export async function getAppliedMigrations(): Promise<MigrationRecord[]> {

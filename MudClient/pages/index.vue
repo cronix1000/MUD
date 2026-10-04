@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import MudTerminal from '~/components/MudTerminal.vue'
+import ZoneBadge from '~/components/widgets/ZoneBadge.vue'
 import Badge from '~/components/ui/badge/Badge.vue'
 import { useMudSocket } from '~/composables/useMudSocket'
 
@@ -21,7 +22,8 @@ const label = computed(() => {
 
 <template>
   <div class="relative flex h-screen w-screen bg-[#0d1117]">
-    <div class="pointer-events-none absolute right-3 top-3 z-10">
+    <div class="pointer-events-none absolute right-3 top-3 z-10 flex items-center gap-2">
+      <ZoneBadge class="pointer-events-auto" />
       <Badge :tone="tone" class="pointer-events-auto">
         {{ label }}
       </Badge>

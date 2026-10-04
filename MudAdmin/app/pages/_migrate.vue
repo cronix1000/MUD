@@ -27,6 +27,31 @@ async function runPending() {
   }
 }
 
+async function synthesize() {
+  running.value = true
+  error.value = null
+  try {
+    const result = await $fetch<{ synthesized: Applied[]; skipped: number[] }>(
+      '/api/migrate/synthesize',
+      { method: 'POST' },
+    )
+    lastResult.value = {
+      backup: null,
+      results: result.synthesized.map((m) => ({
+        version: m.version,
+        name: m.name,
+        ok: true,
+      })),
+    }
+    await refresh()
+  } catch (e: unknown) {
+    const err = e as { data?: { statusMessage?: string }; statusMessage?: string }
+    error.value = err?.data?.statusMessage ?? err?.statusMessage ?? 'Synthesize failed'
+  } finally {
+    running.value = false
+  }
+}
+
 function fmtBytes(n: number) {
   if (n < 1024) return `${n} B`
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
@@ -93,6 +118,22 @@ function fmtTs(ms: number) {
       >
         {{ running ? 'Running…' : `Run ${data?.pending.length} pending (with backup)` }}
       </button>
+      <details class="mt-4 text-sm">
+        <summary class="cursor-pointer text-neutral-400">Schema is already up to date but applied list looks wrong?</summary>
+        <p class="text-neutral-400 mt-2">
+          If the database schema was created by a different tool (C++ server loaders,
+          hand-applied SQL, legacy cutover) and <code>_meta._migrations</code> is empty,
+          click below to scan the live schema and backfill the applied log without
+          re-running any DDL. Safe to run any time; only marks a migration as applied
+          when its key effect (a table or column) already exists.
+        </p>
+        <button
+          class="mt-2 px-3 py-1 rounded bg-neutral-700 hover:bg-neutral-600 text-xs"
+          @click="synthesize"
+        >
+          Synthesize applied log from current schema
+        </button>
+      </details>
     </section>
 
     <section>

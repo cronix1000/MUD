@@ -7,7 +7,7 @@ interface SearchResult {
   href: string
 }
 
-const VALID_TYPES = new Set(['mob', 'npc', 'item', 'quest', 'region', 'skill', 'recipe', 'room', 'interactable'])
+const VALID_TYPES = new Set(['mob', 'npc', 'item', 'quest', 'region', 'skill', 'recipe', 'room', 'interactable', 'zone'])
 
 function buildHref(type: string, id: string): string {
   switch (type) {
@@ -28,6 +28,8 @@ function buildHref(type: string, id: string): string {
       return `/admin/recipes/${encodeURIComponent(id)}`
     case 'interactable':
       return `/admin/world_interactables/${encodeURIComponent(id)}`
+    case 'zone':
+      return `/admin/world_zones/${encodeURIComponent(id)}`
     default:
       return '#'
   }
@@ -146,6 +148,18 @@ async function runQuery(args: QueryArgs): Promise<SearchResult[]> {
       [],
     )
     add(rows, 'interactable', (r) => ({ id: r.template_id, name: `${r.template_id} — ${r.name}` }))
+    return results.slice(0, limit)
+  }
+
+  if (type === 'zone') {
+    const rows = await allRows<{ region_id: string; zone_id: number; name: string }>(
+      `select region_id, zone_id, name from world.world_zones`,
+      [],
+    )
+    add(rows, 'zone', (r) => ({
+      id: `${r.region_id}::${r.zone_id}`,
+      name: `${r.name} (zone ${r.zone_id} in ${r.region_id})`,
+    }))
     return results.slice(0, limit)
   }
 

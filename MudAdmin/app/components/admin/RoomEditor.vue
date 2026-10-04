@@ -63,6 +63,13 @@ interface RoomRow {
   spawn_y: number | null
   scripts_json: string | null
   extra_json: string | null
+  zone_id: number | null
+}
+
+interface ZoneRow {
+  region_id: string
+  zone_id: number
+  name: string
 }
 
 interface ColumnInfo { name: string; type: string; pk: number; dflt_value: unknown; notnull: number }
@@ -80,6 +87,10 @@ const { data: exitsData, refresh: refreshExits } = await useFetch<{ rows: Array<
 )
 const { data: spawnsData, refresh: refreshSpawns } = await useFetch<{ rows: Array<Record<string, unknown>> }>(
   `/api/tables/world_room_spawns`,
+)
+const { data: zonesData } = await useFetch<{ rows: ZoneRow[] }>('/api/tables/world_zones')
+const zonesInRegion = computed<ZoneRow[]>(() =>
+  (zonesData.value?.rows ?? []).filter((z) => z.region_id === regionId.value),
 )
 
 const room = computed<RoomRow | undefined>(() => {
@@ -111,6 +122,7 @@ const draft = reactive({
   spawn_x: 0,
   spawn_y: 0,
   extra_json: '{}',
+  zone_id: 0,
 })
 const scripts = ref<ScriptRef>({ on_enter: null, on_exit: null, on_pulse: null })
 
@@ -130,6 +142,7 @@ watchEffect(() => {
   draft.spawn_x = room.value.spawn_x ?? 0
   draft.spawn_y = room.value.spawn_y ?? 0
   draft.extra_json = room.value.extra_json ?? '{}'
+  draft.zone_id = room.value.zone_id ?? 0
   try {
     const s = JSON.parse(room.value.scripts_json ?? '{}')
     scripts.value = {
@@ -371,6 +384,7 @@ async function save() {
         spawn_y: draft.spawn_y,
         scripts_json: JSON.stringify(scripts.value),
         extra_json: draft.extra_json,
+        zone_id: draft.zone_id,
       },
     })
 
@@ -539,6 +553,18 @@ const unrecognizedInLayout = computed(() => {
           <label class="block text-sm text-neutral-400 mb-1">spawn_y</label>
           <input v-model.number="draft.spawn_y" type="number" class="w-full bg-neutral-950 border border-neutral-700 rounded px-2 py-1" />
         </div>
+      </div>
+      <div>
+        <label class="block text-sm text-neutral-400 mb-1">
+          zone
+          <span class="text-xs text-neutral-500">— partition of this region</span>
+        </label>
+        <select v-model.number="draft.zone_id" class="w-full bg-neutral-950 border border-neutral-700 rounded px-2 py-1 font-mono text-sm">
+          <option :value="0">0 — (no zone)</option>
+          <option v-for="z in zonesInRegion" :key="z.zone_id" :value="z.zone_id">
+            #{{ z.zone_id }} — {{ z.name }}
+          </option>
+        </select>
       </div>
     </div>
 

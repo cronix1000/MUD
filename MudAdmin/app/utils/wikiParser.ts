@@ -1,4 +1,4 @@
-export type EntityType = 'room' | 'npc' | 'mob' | 'item' | 'quest' | 'region' | 'skill' | 'recipe' | 'interactable'
+export type EntityType = 'room' | 'npc' | 'mob' | 'item' | 'quest' | 'region' | 'skill' | 'recipe' | 'interactable' | 'zone'
 
 export interface WikiToken {
   type: 'text' | 'link'
@@ -55,6 +55,8 @@ export function entityHref(type: EntityType, id: string): string {
       return `/admin/recipes/${encodeURIComponent(id)}`
     case 'interactable':
       return `/admin/world_interactables/${encodeURIComponent(id)}`
+    case 'zone':
+      return `/admin/world_zones/${encodeURIComponent(id)}`
     default:
       return '#'
   }
@@ -70,9 +72,10 @@ export const ENTITY_COLORS: Record<EntityType, string> = {
   skill: 'bg-purple-900/40 text-purple-200 border-purple-700/50',
   recipe: 'bg-teal-900/40 text-teal-200 border-teal-700/50',
   interactable: 'bg-pink-900/40 text-pink-200 border-pink-700/50',
+  zone: 'bg-indigo-900/40 text-indigo-200 border-indigo-700/50',
 }
 
-export const knownTypes: EntityType[] = ['room', 'npc', 'mob', 'item', 'quest', 'region', 'skill', 'recipe', 'interactable']
+export const knownTypes: EntityType[] = ['room', 'npc', 'mob', 'item', 'quest', 'region', 'skill', 'recipe', 'interactable', 'zone']
 
 export const ENTITY_ICONS: Record<EntityType, string> = {
   room: '#',
@@ -84,4 +87,5 @@ export const ENTITY_ICONS: Record<EntityType, string> = {
   skill: '*',
   recipe: '+',
   interactable: '^',
+  zone: '§',
 }

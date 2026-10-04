@@ -6,6 +6,9 @@ definePageMeta({ layout: 'admin' })
 const route = useRoute()
 const compositeKey = computed(() => decodeURIComponent(String(route.params.composite)))
 const regionId = computed(() => compositeKey.value)
+const showAddRoom = ref(false)
+const showAddZone = ref(false)
+const refreshRoomList = ref<() => Promise<void> | null>(null)
 
 interface RegionRow {
   id: string
@@ -20,6 +23,20 @@ interface RegionRow {
 
 const { data, refresh } = await useFetch<{ rows: RegionRow[] }>('/api/tables/world_regions')
 const region = computed(() => (data.value?.rows ?? []).find((r) => r.id === regionId.value))
+
+interface ZoneRow {
+  region_id: string
+  zone_id: number
+  name: string
+  description: string | null
+  rules_json: string | null
+  zone_script_ref: string | null
+  is_active: boolean | null
+}
+
+const { data: zonesData, refresh: refreshZones } = await useFetch<{ rows: ZoneRow[] }>('/api/tables/world_zones')
+const zonesInRegion = computed<ZoneRow[]>(() => (zonesData.value?.rows ?? []).filter((z) => z.region_id === regionId.value))
+const existingZoneIds = computed<number[]>(() => zonesInRegion.value.map((z) => z.zone_id))
 
 const TRIBES = ['orcs', 'humans', 'angels', 'monumentals', 'faery', 'devils', 'jinn'] as const
 const BIOMES = [
@@ -177,12 +194,21 @@ function openMap() {
         <h2 class="text-xl font-semibold font-mono">{{ region.id }}</h2>
       </div>
       <div class="flex gap-2">
+        <button class="px-3 py-1.5 rounded bg-sky-700 hover:bg-sky-600 text-sm" @click="showAddRoom = true">+ Add room</button>
         <button class="px-3 py-1.5 rounded bg-neutral-700 hover:bg-neutral-600 text-sm" @click="openMap">Open map</button>
         <button class="px-3 py-1.5 rounded bg-emerald-700 hover:bg-emerald-600 text-sm disabled:opacity-50" :disabled="saving" @click="save">
           {{ saving ? 'Saving…' : 'Save' }}
         </button>
       </div>
     </div>
+
+    <AdminAddRoomModal
+      v-if="showAddRoom"
+      :region-id="regionId"
+      :region-name="region.name"
+      @close="showAddRoom = false"
+      @created="async () => { showAddRoom = false; await refresh(); if (refreshRoomList) await refreshRoomList() }"
+    />
 
     <div v-if="error" class="bg-red-900/40 border border-red-700 rounded px-3 py-2 text-sm text-red-200">{{ error }}</div>
     <div v-if="success" class="bg-emerald-900/40 border border-emerald-700 rounded px-3 py-2 text-sm text-emerald-200">{{ success }}</div>
@@ -283,5 +309,54 @@ function openMap() {
         </div>
       </div>
     </div>
+
+    <div class="bg-neutral-900 border border-neutral-800 rounded p-4 space-y-3">
+      <div class="flex items-center justify-between">
+        <div>
+          <h3 class="text-sm font-semibold">Zones</h3>
+          <p class="text-xs text-neutral-500 mt-1">
+            A zone is a numbered partition of rooms in this region. Each zone can carry rule flags
+            (PvP, magic, recall, respawn) and optionally reference a Lua generator for procedural rooms.
+          </p>
+        </div>
+        <button
+          class="px-3 py-1.5 rounded bg-sky-700 hover:bg-sky-600 text-xs"
+          @click="showAddZone = true"
+        >
+          + New zone
+        </button>
+      </div>
+
+      <div v-if="!zonesInRegion.length" class="text-xs text-neutral-500">
+        No zones yet. Existing rooms fall back to <code>zone_id=0</code> (legacy "no zone").
+      </div>
+      <ul v-else class="divide-y divide-neutral-800">
+        <li
+          v-for="z in zonesInRegion"
+          :key="`${z.region_id}::${z.zone_id}`"
+          class="py-2 flex items-center gap-3"
+        >
+          <span class="font-mono text-indigo-300 w-12">#{{ z.zone_id }}</span>
+          <span class="flex-1">
+            <NuxtLink
+              :to="`/world_zones/${encodeURIComponent(encodeCompositeKey('world_zones', { region_id: z.region_id, zone_id: z.zone_id }))}`"
+              class="text-neutral-100 hover:underline font-medium"
+            >{{ z.name }}</NuxtLink>
+            <span v-if="z.zone_script_ref" class="ml-2 text-xs text-amber-400 font-mono">[procedural: {{ z.zone_script_ref }}]</span>
+            <span v-if="z.description" class="block text-xs text-neutral-500 mt-0.5">{{ z.description }}</span>
+          </span>
+          <span class="text-xs text-neutral-500 font-mono">{{ z.is_active ? 'active' : 'inactive' }}</span>
+        </li>
+      </ul>
+    </div>
+
+    <AdminAddZoneModal
+      v-if="showAddZone"
+      :region-id="regionId"
+      :region-name="region.name"
+      :existing-zone-ids="existingZoneIds"
+      @close="showAddZone = false"
+      @created="async () => { showAddZone = false; await refreshZones() }"
+    />
   </div>
 </template>

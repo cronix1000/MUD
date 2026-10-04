@@ -1,10 +1,11 @@
-import { ensureSchemas, runPendingMigrations, getAppliedMigrations, getPendingMigrations, listBackups } from './migrate'
+import { ensureSchemas, runPendingMigrations, getAppliedMigrations, getPendingMigrations, listBackups, synthesizeAppliedMigrations } from './migrate'
 
 const args = new Set(process.argv.slice(2))
 const wantBackup = !args.has('--no-backup')
 const skipArg = [...args].find((a) => a.startsWith('--skip='))
 const skipVersions = skipArg ? skipArg.slice('--skip='.length).split(',').map(Number).filter(Number.isFinite) : undefined
 const dryRun = args.has('--dry-run')
+const synthesize = args.has('--synthesize')
 
 async function main() {
   if (!process.env.MUD_DATABASE_URL) {
@@ -28,6 +29,18 @@ async function main() {
     const filtered = allPending.filter((m) => !skipSet.has(m.version))
     console.log('Pending migrations that would run:')
     for (const m of filtered) console.log(`  ${m.version} ${m.name}`)
+    process.exit(0)
+  }
+
+  if (synthesize) {
+    const result = await synthesizeAppliedMigrations()
+    console.log(`Synthesized ${result.synthesized.length} migration(s) from existing schema:`)
+    for (const m of result.synthesized) {
+      console.log(`  + #${m.version} ${m.name}`)
+    }
+    if (result.skipped.length) {
+      console.log(`Skipped ${result.skipped.length} already-applied migration(s).`)
+    }
     process.exit(0)
   }
 

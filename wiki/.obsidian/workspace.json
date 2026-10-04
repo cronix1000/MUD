@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Database.md",
+                "file": "Master.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Database"
+              "title": "Master"
             }
           }
         ]
@@ -190,7 +190,8 @@
   },
   "active": "b187de94d2f251c5",
   "lastOpenFiles": [
-    "Master.md",
-    "Database.md"
+    "Rooms.md",
+    "Database.md",
+    "Master.md"
   ]
 }

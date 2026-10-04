@@ -151,6 +151,21 @@ export const COMPOSITE_KEYS: Record<string, CompositeKeySpec> = {
       return { id }
     },
   },
+  world_zones: {
+    fields: ['region_id', 'zone_id'],
+    encode: (r) => `${r.region_id}::${r.zone_id}`,
+    decode: (raw) => {
+      const [region_id, zone_id] = decodeURIComponent(raw).split('::')
+      if (!region_id || !zone_id) {
+        throw createError({ statusCode: 400, statusMessage: `Invalid composite key: ${raw}` })
+      }
+      const n = Number(zone_id)
+      if (!Number.isInteger(n)) {
+        throw createError({ statusCode: 400, statusMessage: `Invalid zone_id: ${zone_id}` })
+      }
+      return { region_id, zone_id: n }
+    },
+  },
 }
 
 export function isCompositeKey(table: string): boolean {

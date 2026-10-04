@@ -25,6 +25,7 @@ const ALLOWED_TABLES = new Set([
   'world_quest_objectives',
   'world_quest_rewards',
   'world_recipes',
+  'world_zones',
 ])
 
 function defaultConnectionString(): string {
@@ -206,8 +207,41 @@ export async function insertRow(table: string, body: Record<string, unknown>) {
   const returningClause = singlePk && !validKeys.includes(singlePk) ? ` RETURNING ${singlePk}` : ''
   const sql = `insert into ${qualified(table)} (${validKeys.join(', ')}) values (${placeholders})${returningClause}`
   const values = validKeys.map((k) => payload[k])
-  const res = await getPool().query(sql, values)
-  return { id: res.rows[0]?.[singlePk ?? ''] ?? null, changes: res.rowCount ?? 0, _hasJsonb: hasJsonb }
+  try {
+    const res = await getPool().query(sql, values)
+    return { id: res.rows[0]?.[singlePk ?? ''] ?? null, changes: res.rowCount ?? 0, _hasJsonb: hasJsonb }
+  } catch (err: unknown) {
+    const e = err as { code?: string; constraint?: string; message?: string }
+    if (e?.code === '23505') {
+      const existing = spec && pkFields.every((f) => payload[f] !== undefined)
+        ? await findExistingByPk(table, spec.fields, payload).catch(() => null)
+        : null
+      throw createError({
+        statusCode: 409,
+        statusMessage: `Row already exists in ${table}`,
+        data: {
+          table,
+          pkFields: spec?.fields ?? (singlePk ? [singlePk] : []),
+          pkValues: Object.fromEntries((spec?.fields ?? (singlePk ? [singlePk] : [])).map((f) => [f, payload[f]])),
+          existing,
+          hint: existing
+            ? `A row with id ${existing.id ?? ''} already exists: "${existing.name ?? ''}". Pick a different id or open the existing one.`
+            : 'A row with that key already exists.',
+        },
+      })
+    }
+    throw err
+  }
+}
+
+async function findExistingByPk(table: string, fields: string[], payload: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+  const where = fields.map((f, i) => `${f} = $${i + 1}`).join(' and ')
+  const values = fields.map((f) => payload[f])
+  const res = await getPool().query(
+    `select * from ${qualified(table)} where ${where} limit 1`,
+    values,
+  )
+  return res.rows[0] ?? null
 }
 
 export async function updateRow(table: string, id: unknown, body: Record<string, unknown>) {

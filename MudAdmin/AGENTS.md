@@ -70,6 +70,14 @@ Migrations are **never** auto-run on admin startup — you control when they exe
 
 Snapshot-style backups live separately in `ModularMudServer/mud.db.snapshots/` and are managed via `/admin/snapshots`. They survive migration runs and exist purely for human-driven rollback. Restore always makes a `mud.db.snap.<ISO timestamp>` first.
 
+### Backfilling the applied log (synthesize)
+
+If the schema was created by a different tool (C++ server's `IF NOT EXISTS` loaders, the legacy SQLite cutover, hand-applied SQL) but `_meta._migrations` is empty, the admin can't see what's been done. Use **Synthesize** (button under the Pending section of `/admin/_migrate`) or `node scripts/migrate.mjs --synthesize` from the `scripts/` directory.
+
+The synthesizer inspects the live schema (`information_schema.tables`, `information_schema.columns`) for one key effect per migration (the SIGNATURES map in `migrate.ts`) and marks that migration as applied if the effect is present. It never re-runs DDL — it only backfills the bookkeeping.
+
+When adding a new migration to `MIGRATIONS`, also add a matching entry to `SIGNATURES` so future synthesize calls recognize it.
+
 ## Script editing workflow
 
 Editing is **always in VSCode** — the admin never writes Lua files.
@@ -140,3 +148,133 @@ This is intentionally deferred — it's an opt-in per-world setting.
 - Server DB writes always go through `server/utils/db.ts` (`insertRow`, `updateRow`, `deleteRow`) — do not write SQL directly from a page handler.
 - Composite-key IDs are URL-encoded as `encodeURIComponent(encodeCompositeKey(table, row))`.
 - New admin pages should add themselves to the sidebar (`app/layouts/admin.vue`) and `server/api/nav/tree.get.ts` if they belong in World Building / World Tree / Player / World raw tables.
+
+## World content & feature authoring
+
+World content (regions, rooms, mobs, items, recipes, …) and player accounts
+live in Postgres. The admin UI is the source of truth for the static shape
+of the world. The MUD server reads Postgres on boot.
+
+### Who ships features
+
+Two classes of work:
+
+| Class  | Who                | What they do                                            |
+|--------|--------------------|---------------------------------------------------------|
+| Tune   | world-builder      | Edit values on existing entity fields or `meta` keys    |
+| Ship   | coder              | Add C++ hooks, Lua bindings, ECS components, migrations |
+
+World-builders ship features by *tuning*. If a feature can't be expressed
+as a registered `meta` key, it's a coder feature.
+
+### The proxy workflow (adding a feature)
+
+1. **Can this be pure behavior?** — yes → write a Lua script in
+   `ModularMudServer/scripts/`. Stop here.
+
+2. **Does it need per-entity variation?** — yes → use `meta.*` in the
+   entity's `components_json`. Lua reads via `get_meta(entity_id)`.
+
+3. **Will many entities share the same per-entity variation?**
+   — register the key in `metaKeys.ts`. MudAdmin renders a typed widget.
+   Codegen produces C++ defaults and a Lua constants table.
+
+4. **Does it need a new game event?** — coder adds the hook to
+   `ScriptEventBridge` + a C++ binding to publish it. Steps 2-3 then
+   apply.
+
+5. **Does it need to be queried in SQL or admin reports?** — promote
+   the `meta` key to a typed column. Migration in `migrate.ts`, backfill
+   from `meta`, remove the meta read.
+
+### When to create a new table
+
+Only when the entity is a genuinely new noun the game doesn't track
+yet (factions, shops, guilds, mail, housing). Otherwise extend an
+existing table or use `meta` JSON.
+
+### Schema gap list (as of the audit)
+
+Status as of Layer 3:
+
+- **Light level on rooms** (`world_rooms.light INT`) — **done in Layer 3**
+- **`is_one_way` exit column loaded but discarded** by `LoadRoomJson`
+  — **done in Layer 3**
+- **No `on_xp_gain` / `on_level_up` hooks** — **done in Layer 1**
+- **`player_known_recipes` is empty** — wired in recipe runtime (Layer 1)
+- **Faction / shop / mail / board tables** — **done in Layer 3**
+  (loaders wired; runtime systems for mail/boards pending).
+- **Class / race tables** — **done in Layer 3**
+  (loaders + player level/class_id/race_id columns; bonus application pending).
+- **`world_quests` tables are dormant** — code-first quest system uses
+  player JSON blob instead (`PlayerVariablesComponent.stringVars`).
+  Tables kept for now; can drop if confirmed unused.
+
+Still pending (out of scope for Layer 1-3, future coder work):
+- Player housing tables
+- Guild / clan tables
+- Mail *send* runtime (loaders only this layer)
+- Board *post* runtime (loaders only this layer)
+- Class/race bonus application at level-up
+- AOE / damage-over-time hook (`on_aoe_damage`, `on_dot_tick`)
+
+### Two-class authoring surface — currently wired
+
+The admin writes `meta` JSON blobs into `components_json` (rooms,
+items, mobs, interactables). The C++ server reads these into
+`MetaComponent.meta` at entity creation, validates against
+`MetaRegistry::ApplyDefaults`, and exposes them to Lua via the
+`get_meta(entity_id)` binding.
+
+### The `meta` registry (`app/utils/metaKeys.ts`)
+
+Single source of truth for typed `meta` keys. Each key has:
+`type` (int|float|bool|string|enum), `default`, optional `min`/`max`/
+`maxLen`/`values`, `label`, `help`.
+
+When a `meta.*` value becomes common across many entities, coders add
+the key here. MudAdmin renders it as a typed widget via
+`AdminMetaEditor`. The C++ mirror lives at
+`ModularMudServer/MetaRegistry.h` — same shape, hand-maintained until
+codegen is added.
+
+The two files must stay in sync. The C++ side falls back to defaults
+on mismatch, so a forgotten update never crashes the server — but a
+typo in defaults can silently change behavior.
+
+### `AdminMetaEditor` usage
+
+```vue
+<AdminMetaEditor
+  entity-type="mob"
+  v-model="row.meta"
+/>
+```
+
+Loads `META_KEYS[entityType]`, hydrates with `row.meta`, emits merged
+values on change. Renders one widget per registered key. Unregistered
+keys are shown read-only under a "Custom (unregistered) keys"
+disclosure.
+
+## Layer 3 — new tables
+
+Migrations 19-23 added new tables:
+
+| Migration | Tables / columns |
+|-----------|------------------|
+| 19 | `world_rooms.light INT` |
+| 20 | `world.world_factions`, `world.world_faction_relations`, `players.player_faction_standing` |
+| 21 | `players.player_players.gold`, `bank_balance`; `world.world_shop_keeper`, `world.world_shop_inventory` |
+| 22 | `players.player_mail`, `world.world_board`, `players.player_board_post` |
+| 23 | `world.world_classes`, `world.world_races`; `players.player_players.class_id`, `race_id`, `level` |
+
+Admin pages should follow the patterns already in `/admin/world_*` and
+`/admin/player_*`. Most have no specialized editor yet — the generic
+table page works.
+
+### One-way exits
+
+`world_room_exits.is_one_way` is now read end-to-end (loader + parser).
+A one-way exit in the DB does NOT auto-create a return path. If the
+admin wants a return path on the destination room, declare it as a
+second one-way exit pointing back.

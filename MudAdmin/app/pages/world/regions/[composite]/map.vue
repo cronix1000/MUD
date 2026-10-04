@@ -157,6 +157,7 @@ const visibleExits = computed(() => {
 
 const roomHref = (r: Room) => `/world_rooms/${encodeURIComponent(encodeCompositeKey('world_rooms', r))}`
 
+const showAddRoom = ref(false)
 function downloadSvg() {
   const svg = (document.getElementById('region-map-svg') as SVGSVGElement | null)?.outerHTML
   if (!svg) return
@@ -183,8 +184,18 @@ function downloadSvg() {
       </button>
     </div>
 
-    <div v-if="!data?.rooms.length" class="text-neutral-500">
-      No rooms in this region yet.
+    <AdminAddRoomModal
+      v-if="showAddRoom"
+      :region-id="region_id"
+      @close="showAddRoom = false"
+      @created="async () => { showAddRoom = false; await refresh() }"
+    />
+
+    <div v-if="!data?.rooms.length" class="bg-neutral-900 border border-neutral-800 rounded p-6 text-center space-y-3">
+      <p class="text-neutral-400">No rooms in this region yet.</p>
+      <button class="px-3 py-1.5 rounded bg-sky-700 hover:bg-sky-600 text-sm" @click="showAddRoom = true">
+        + Add the first room
+      </button>
     </div>
 
     <div v-else class="bg-neutral-900 border border-neutral-800 rounded p-2 overflow-auto">

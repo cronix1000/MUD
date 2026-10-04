@@ -18,7 +18,7 @@ function onInput(e: Event) {
   emit('update:modelValue', target.value)
 }
 
-const knownEntityTypes: EntityType[] = ['room', 'npc', 'mob', 'item', 'quest', 'region', 'skill', 'recipe', 'interactable']
+const knownEntityTypes: EntityType[] = ['room', 'npc', 'mob', 'item', 'quest', 'region', 'skill', 'recipe', 'interactable', 'zone']
 
 interface SearchResult { type: string; id: string; name: string; href: string }
 const showPicker = ref(false)
