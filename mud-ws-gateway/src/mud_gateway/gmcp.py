@@ -43,6 +43,7 @@ SUPPORTED_MODULES = {
     "Inventory.Item.Add",
     "Inventory.Item.Remove",
     "Command.List",
+    "Entity.Inspect",
 }
 
 

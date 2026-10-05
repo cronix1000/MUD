@@ -100,7 +100,7 @@ export function useMudSocket(): MudSocket {
       const subscriptions = JSON.stringify({
         channel: 'gmcp',
         module: 'Client.Subscriptions.List',
-        data: ['Char.Vitals', 'Char.Name', 'Room.Info', 'Room.Map', 'Inventory.Items', 'Comm.Channel.Text'],
+        data: ['Char.Vitals', 'Char.Name', 'Room.Info', 'Room.Map', 'Inventory.Items', 'Comm.Channel.Text', 'Entity.Inspect'],
       })
       socket?.send(subscriptions)
     })
