@@ -71,6 +71,7 @@ export interface ColumnInfo {
   notnull: 0 | 1
   dflt_value: unknown
   pk: 0 | 1
+  is_identity: 0 | 1
 }
 
 function schemaFor(table: string): 'world' | 'players' | '_meta' {
@@ -88,11 +89,16 @@ export async function getColumns(table: string): Promise<ColumnInfo[]> {
     data_type: string
     is_nullable: 'YES' | 'NO'
     column_default: string | null
+    attidentity: string
   }>(
-    `SELECT ordinal_position, column_name, data_type, is_nullable, column_default
-       FROM information_schema.columns
-      WHERE table_schema = $1 AND table_name = $2
-      ORDER BY ordinal_position`,
+    `SELECT c.ordinal_position, c.column_name, c.data_type, c.is_nullable, c.column_default,
+            COALESCE(a.attidentity, '') AS attidentity
+       FROM information_schema.columns c
+       LEFT JOIN pg_attribute a
+         ON a.attrelid = (c.table_schema || '.' || c.table_name)::regclass
+        AND a.attname = c.column_name
+      WHERE c.table_schema = $1 AND c.table_name = $2
+      ORDER BY c.ordinal_position`,
     [schema, table],
   )
   return res.rows.map((r) => ({
@@ -102,6 +108,7 @@ export async function getColumns(table: string): Promise<ColumnInfo[]> {
     notnull: r.is_nullable === 'NO' ? 1 : 0,
     dflt_value: r.column_default,
     pk: 0,
+    is_identity: r.attidentity === 'a' || r.attidentity === 'd' ? 1 : 0,
   }))
 }
 
@@ -191,12 +198,24 @@ export async function insertRow(table: string, body: Record<string, unknown>) {
     if (spec) return true
     const col = cols.find((c) => c.name === f)
     if (!col) return true
-    return !(col.type.toLowerCase().includes('integer') && /serial|bigserial|identity/.test(col.dflt_value?.toString() ?? ''))
+    return !isAutoIntColumn(col)
   })
   for (const f of requiredPkFields) {
     if (payload[f] === undefined) {
+      if (table === 'world_rooms' && f === 'room_id' && typeof payload.region_id === 'string') {
+        payload.room_id = await assignNextRoomId(payload.region_id)
+        continue
+      }
       throw createError({ statusCode: 400, statusMessage: `Missing PK field(s) for ${table}: ${f}` })
     }
+  }
+
+  if (table === 'world_room_exits') {
+    await assertExitTargetExists(
+      payload.region_id,
+      payload.to_room_id,
+      payload.from_room_id,
+    )
   }
 
   const validKeys = Object.keys(payload).filter((k) => colNames.includes(k))
@@ -207,6 +226,13 @@ export async function insertRow(table: string, body: Record<string, unknown>) {
   const returningClause = singlePk && !validKeys.includes(singlePk) ? ` RETURNING ${singlePk}` : ''
   const sql = `insert into ${qualified(table)} (${validKeys.join(', ')}) values (${placeholders})${returningClause}`
   const values = validKeys.map((k) => payload[k])
+
+  const autoAssignedRoomId = table === 'world_rooms' && typeof payload.room_id === 'number'
+
+  if (autoAssignedRoomId) {
+    return await insertWorldRoomWithAutoId(payload, validKeys, hasJsonb)
+  }
+
   try {
     const res = await getPool().query(sql, values)
     return { id: res.rows[0]?.[singlePk ?? ''] ?? null, changes: res.rowCount ?? 0, _hasJsonb: hasJsonb }
@@ -234,6 +260,55 @@ export async function insertRow(table: string, body: Record<string, unknown>) {
   }
 }
 
+async function insertWorldRoomWithAutoId(
+  payload: Record<string, unknown>,
+  validKeys: string[],
+  hasJsonb: boolean,
+): Promise<{ id: unknown; changes: number; _hasJsonb: boolean }> {
+  const pool = getPool()
+  const region_id = String(payload.region_id ?? '')
+  const otherCols = validKeys.filter((k) => k !== 'region_id' && k !== 'room_id')
+  const otherPlaceholders = otherCols.map((_, i) => `$${i + 3}`).join(', ')
+  const insertSql = `INSERT INTO world.world_rooms (region_id, room_id${otherCols.length ? ', ' + otherCols.join(', ') : ''})
+                     VALUES ($1, $2${otherCols.length ? ', ' + otherPlaceholders : ''})
+                     RETURNING room_id`
+
+  let lastErr: unknown = null
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN ISOLATION LEVEL READ COMMITTED')
+      const next = await client.query<{ id: number }>(
+        `SELECT COALESCE(MAX(room_id), 0) + 1 AS id
+           FROM world.world_rooms
+          WHERE region_id = $1
+          FOR UPDATE`,
+        [region_id],
+      )
+      const id = Number(next.rows[0]?.id ?? 1)
+      if (!Number.isSafeInteger(id) || id > 2_147_483_647) {
+        throw createError({ statusCode: 400, statusMessage: `No free room_id in region ${region_id}` })
+      }
+      const params = [region_id, id, ...otherCols.map((k) => payload[k])]
+      const res = await client.query(insertSql, params)
+      await client.query('COMMIT')
+      return {
+        id: res.rows[0]?.room_id ?? id,
+        changes: res.rowCount ?? 0,
+        _hasJsonb: hasJsonb,
+      }
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {})
+      lastErr = err
+      const e = err as { code?: string }
+      if (e?.code !== '23505') throw err
+    } finally {
+      client.release()
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error('Failed to insert world_room after retries')
+}
+
 async function findExistingByPk(table: string, fields: string[], payload: Record<string, unknown>): Promise<Record<string, unknown> | null> {
   const where = fields.map((f, i) => `${f} = $${i + 1}`).join(' and ')
   const values = fields.map((f) => payload[f])
@@ -257,6 +332,17 @@ export async function updateRow(table: string, id: unknown, body: Record<string,
   }
   const validKeys = Object.keys(payload).filter((k) => colNames.includes(k) && !pkFields.includes(k))
   if (validKeys.length === 0) throw createError({ statusCode: 400, statusMessage: 'No updatable columns' })
+
+  if (table === 'world_room_exits' && payload.to_room_id !== undefined) {
+    const existing = await getPool().query<{ region_id: string; from_room_id: number }>(
+      `SELECT region_id, from_room_id FROM world.world_room_exits WHERE ${singlePk ? `${singlePk} = $1` : '1=0'} LIMIT 1`,
+      [id],
+    )
+    const row = existing.rows[0]
+    if (row) {
+      await assertExitTargetExists(row.region_id, payload.to_room_id, row.from_room_id)
+    }
+  }
 
   const setSql = validKeys.map((k, i) => `${k} = $${i + 1}`).join(', ')
   const w = isComposite(table)
@@ -298,6 +384,14 @@ export async function deleteRow(table: string, id: unknown) {
 
 function isJsonColumn(name: string): boolean {
   return name.endsWith('_json')
+}
+
+function isAutoIntColumn(col: ColumnInfo): boolean {
+  if (col.is_identity === 1) return true
+  const t = col.type.toLowerCase()
+  if (!(t === 'integer' || t === 'bigint' || t === 'smallint')) return false
+  const def = (col.dflt_value?.toString() ?? '').toLowerCase()
+  return /nextval\(/.test(def) || /\b(serial|bigserial|identity)\b/.test(def)
 }
 
 async function coercePayload(table: string, body: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -348,5 +442,61 @@ export async function closePool(): Promise<void> {
   if (_pool) {
     await _pool.end()
     _pool = null
+  }
+}
+
+async function assignNextRoomId(region_id: string): Promise<number> {
+  const pool = getPool()
+  let lastErr: unknown = null
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN ISOLATION LEVEL READ COMMITTED')
+      const next = await client.query<{ id: number }>(
+        `SELECT COALESCE(MAX(room_id), 0) + 1 AS id
+           FROM world.world_rooms
+          WHERE region_id = $1
+          FOR UPDATE`,
+        [region_id],
+      )
+      const id = Number(next.rows[0]?.id ?? 1)
+      if (!Number.isSafeInteger(id) || id > 2_147_483_647) {
+        throw createError({ statusCode: 400, statusMessage: `No free room_id in region ${region_id}` })
+      }
+      await client.query('COMMIT')
+      return id
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {})
+      lastErr = err
+    } finally {
+      client.release()
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error('Failed to assign room_id')
+}
+
+async function assertExitTargetExists(
+  region_id: unknown,
+  to_room_id: unknown,
+  from_room_id: unknown,
+): Promise<void> {
+  if (region_id === undefined || region_id === null) return
+  if (to_room_id === undefined || to_room_id === null) return
+  if (Number(to_room_id) === Number(from_room_id)) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: `Exit cannot target its own room (${region_id}::${to_room_id})`,
+    })
+  }
+  const pool = getPool()
+  const r = await pool.query<{ exists: number }>(
+    `SELECT 1 AS exists FROM world.world_rooms WHERE region_id = $1 AND room_id = $2 LIMIT 1`,
+    [region_id, Math.trunc(Number(to_room_id))],
+  )
+  if (!r.rows.length) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: `Exit target ${region_id}::${to_room_id} does not exist`,
+    })
   }
 }

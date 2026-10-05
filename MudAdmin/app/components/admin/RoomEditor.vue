@@ -102,6 +102,40 @@ const room = computed<RoomRow | undefined>(() => {
   ) as RoomRow | undefined
 })
 
+const regionRoomIds = computed<Set<number>>(() => {
+  const set = new Set<number>()
+  for (const r of roomData.value?.rows ?? []) {
+    if (String(r.region_id) === regionId.value) {
+      set.add(Number(r.room_id))
+    }
+  }
+  return set
+})
+
+const visibleExits = computed(() => exits.value.filter((x) => !x._deleted))
+const selfLoopExits = computed(() =>
+  visibleExits.value.filter((e) => Number(e.target_room) === roomId.value),
+)
+const danglingExits = computed(() =>
+  visibleExits.value.filter(
+    (e) => !regionRoomIds.value.has(Number(e.target_room)),
+  ),
+)
+
+function exitStatus(e: ExitRow): 'ok' | 'self_loop' | 'invalid' {
+  if (!regionRoomIds.value.has(Number(e.target_room))) return 'invalid'
+  if (Number(e.target_room) === roomId.value) return 'self_loop'
+  return 'ok'
+}
+
+function roomNameFor(targetRoomId: number): string | null {
+  const rows = roomData.value?.rows ?? []
+  const r = rows.find(
+    (x) => String(x.region_id) === regionId.value && Number(x.room_id) === targetRoomId,
+  ) as RoomRow | undefined
+  return r?.name ?? null
+}
+
 const terrainsInWorld = computed<TerrainRow[]>(() => {
   return terrainsData.value?.rows ?? []
 })
@@ -232,6 +266,12 @@ watchEffect(() => {
       is_one_way: Boolean(e.is_one_way),
     }))
 })
+
+const OPPOSITE_DIR: Record<string, string> = {
+  north: 'south', south: 'north',
+  east: 'west',   west: 'east',
+  up: 'down',     down: 'up',
+}
 
 function addExit() {
   exits.value.push({
@@ -365,6 +405,23 @@ const success = ref<string | null>(null)
 
 async function save() {
   if (!room.value) return
+  syncExitTargetRooms()
+  if (danglingExits.value.length) {
+    const list = danglingExits.value
+      .map((e) => `${e.direction} → #${e.target_room}`)
+      .join(', ')
+    error.value = `Exits target rooms that don't exist in ${regionId.value}: ${list}. Pick valid room ids first.`
+    tab.value = 'exits'
+    return
+  }
+  if (selfLoopExits.value.length) {
+    const list = selfLoopExits.value
+      .map((e) => `${e.direction} → #${e.target_room}`)
+      .join(', ')
+    error.value = `Exits target the room itself: ${list}. Self-loops are not allowed.`
+    tab.value = 'exits'
+    return
+  }
   saving.value = true
   error.value = null
   success.value = null
@@ -425,6 +482,44 @@ async function save() {
           is_one_way: e.is_one_way ? 1 : 0,
         },
       })
+    }
+
+    const newForwards = exits.value.filter((x) => !x._deleted && x._isNew && !x.is_one_way)
+    if (newForwards.length) {
+      const latest = await $fetch<{ rows: Array<{ from_room_id: number; direction: string; to_room_id: number }> }>(
+        `/api/tables/world_room_exits`,
+        { query: { q: JSON.stringify({ region_id: regionId.value }), limit: 1000 } },
+      )
+      for (const f of newForwards) {
+        const ret = OPPOSITE_DIR[f.direction]
+        if (!ret) continue
+        if (Number(f.target_room) === roomId.value) continue
+        const exists = latest.rows.some(
+          (r) =>
+            Number(r.from_room_id) === Number(f.target_room) &&
+            String(r.direction) === ret &&
+            Number(r.to_room_id) === roomId.value,
+        )
+        if (exists) continue
+        try {
+          await $fetch(`/api/tables/world_room_exits`, {
+            method: 'POST',
+            body: {
+              region_id: regionId.value,
+              from_room_id: Number(f.target_room),
+              direction: ret,
+              to_room_id: roomId.value,
+              dest_x: room.value?.spawn_x ?? -1,
+              dest_y: room.value?.spawn_y ?? -1,
+              is_portal: 0,
+              portal_name: '',
+              auto_trigger: 1,
+              is_one_way: 0,
+            },
+          })
+        } catch {
+        }
+      }
     }
 
     for (const s of spawns.value.filter((x) => x._deleted)) {
@@ -778,6 +873,17 @@ const unrecognizedInLayout = computed(() => {
         <h3 class="text-sm font-semibold">Exits</h3>
         <button class="px-2 py-1 text-xs bg-emerald-700 hover:bg-emerald-600 rounded" @click="addExit">+ Add exit</button>
       </div>
+
+      <div v-if="danglingExits.length || selfLoopExits.length" class="mb-3 px-3 py-2 rounded text-sm bg-amber-900/30 border border-amber-700 text-amber-200">
+        <div v-if="danglingExits.length">
+          {{ danglingExits.length }} exit(s) target rooms that don't exist in
+          <span class="font-mono">{{ regionId }}</span>. Pick a room id from the list, or create the target room first.
+        </div>
+        <div v-if="selfLoopExits.length" :class="danglingExits.length ? 'mt-1' : ''">
+          {{ selfLoopExits.length }} exit(s) point back at this room. Self-loops are not allowed.
+        </div>
+      </div>
+
       <table class="w-full text-sm">
         <thead class="text-left text-neutral-500 text-xs">
           <tr>
@@ -790,29 +896,52 @@ const unrecognizedInLayout = computed(() => {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(e, i) in exits.filter((x)=>!x._deleted)" :key="e.id ?? `new-${i}`" class="border-t border-neutral-800">
-            <td class="px-2 py-1">
-              <select v-model="e.direction" class="bg-neutral-950 border border-neutral-700 rounded px-1 py-0.5 font-mono">
-                <option v-for="d in ['north','south','east','west','up','down']" :key="d" :value="d">{{ d }}</option>
-              </select>
-            </td>
-            <td class="px-2 py-1">
-              <AdminWikiIdInput v-model="e._targetRoomInput" placeholder="target room" />
-            </td>
-            <td class="px-2 py-1"><input v-model.number="e.dest_x" type="number" class="w-16 bg-neutral-950 border border-neutral-700 rounded px-1 py-0.5 font-mono" /></td>
-            <td class="px-2 py-1"><input v-model.number="e.dest_y" type="number" class="w-16 bg-neutral-950 border border-neutral-700 rounded px-1 py-0.5 font-mono" /></td>
-            <td class="px-2 py-1">
-              <label class="text-xs flex items-center gap-2"><input type="checkbox" v-model="e.is_portal" />portal</label>
-              <label class="text-xs flex items-center gap-2"><input type="checkbox" v-model="e.is_one_way" />one-way</label>
-              <label class="text-xs flex items-center gap-2"><input type="checkbox" v-model="e.auto_trigger" />auto</label>
-            </td>
-            <td class="px-2 py-1 text-right"><button class="text-red-400 hover:underline text-xs" @click="removeExit(exits.indexOf(e))">remove</button></td>
-          </tr>
+          <template v-for="(e, i) in exits" >
+            <tr v-if="!e._deleted" :key="e.id ?? `new-${i}`" class="border-t border-neutral-800">
+              <td class="px-2 py-1">
+                <select v-model="e.direction" class="bg-neutral-950 border border-neutral-700 rounded px-1 py-0.5 font-mono">
+                  <option v-for="d in ['north','south','east','west','up','down']" :key="d" :value="d">{{ d }}</option>
+                </select>
+              </td>
+              <td class="px-2 py-1">
+                <div class="flex items-center gap-2">
+                  <AdminWikiIdInput v-model="e._targetRoomInput" placeholder="target room" />
+                  <span
+                    v-if="exitStatus(e) === 'invalid'"
+                    class="text-xs text-red-400 font-mono whitespace-nowrap"
+                    :title="`No room #${e.target_room} in ${regionId}`"
+                  >no such room</span>
+                  <span
+                    v-else-if="exitStatus(e) === 'self_loop'"
+                    class="text-xs text-amber-400 font-mono whitespace-nowrap"
+                  >self-loop</span>
+                  <span v-else-if="roomNameFor(Number(e.target_room))" class="text-xs text-neutral-500 font-mono whitespace-nowrap truncate max-w-[14rem]">
+                    → {{ roomNameFor(Number(e.target_room)) }}
+                  </span>
+                </div>
+              </td>
+              <td class="px-2 py-1"><input v-model.number="e.dest_x" type="number" class="w-16 bg-neutral-950 border border-neutral-700 rounded px-1 py-0.5 font-mono" /></td>
+              <td class="px-2 py-1"><input v-model.number="e.dest_y" type="number" class="w-16 bg-neutral-950 border border-neutral-700 rounded px-1 py-0.5 font-mono" /></td>
+              <td class="px-2 py-1">
+                <label class="text-xs flex items-center gap-2"><input type="checkbox" v-model="e.is_portal" />portal</label>
+                <label class="text-xs flex items-center gap-2"><input type="checkbox" v-model="e.is_one_way" />one-way</label>
+                <label class="text-xs flex items-center gap-2"><input type="checkbox" v-model="e.auto_trigger" />auto</label>
+              </td>
+              <td class="px-2 py-1 text-right"><button class="text-red-400 hover:underline text-xs" @click="removeExit(exits.indexOf(e))">remove</button></td>
+            </tr>
+          </template>
           <tr v-if="!exits.filter((x)=>!x._deleted).length">
             <td colspan="6" class="px-2 py-3 text-center text-neutral-500">No exits.</td>
           </tr>
         </tbody>
       </table>
+
+      <details v-if="regionRoomIds.size" class="mt-3 text-xs text-neutral-400">
+        <summary class="cursor-pointer">rooms in {{ regionId }} ({{ regionRoomIds.size }})</summary>
+        <div class="font-mono mt-1 break-all text-neutral-500">
+          <span v-for="id in [...regionRoomIds].sort((a, b) => a - b)" :key="id" class="mr-2">#{{ id }}</span>
+        </div>
+      </details>
     </div>
 
     <div v-if="tab==='spawns'" class="bg-neutral-900 border border-neutral-800 rounded p-4">
