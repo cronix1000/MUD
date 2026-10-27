@@ -1,4 +1,4 @@
-import { getPool } from '../../utils/db'
+import { getEntity, upsertEntity } from '../../utils/entities'
 
 interface StarterTile {
   symbol: string
@@ -148,7 +148,7 @@ const FLOOR_PALETTES: FloorPalette[] = [
       { symbol: "'", name: 'Survivor Lamp',    color: '&Y', blocks_move: 0, blocks_sight: 0, move_cost: 1 },
       { symbol: '>', name: 'Stairs Down',      color: '&W', blocks_move: 0, blocks_sight: 0, move_cost: 1 },
       { symbol: '<', name: 'Stairs Up',        color: '&W', blocks_move: 0, blocks_sight: 0, move_cost: 1 },
-      { symbol: '#', name: 'Tyrn Crucible',    color: '&R', blocks_move: 0, blocks_sight: 0, move_cost: 1 },
+      { symbol: 'N', name: 'Tyrn Crucible',    color: '&R', blocks_move: 0, blocks_sight: 0, move_cost: 1 },
     ],
   },
 ]
@@ -158,74 +158,39 @@ function uniq<T>(arr: T[]): T[] {
 }
 
 export default defineEventHandler(async () => {
-  const pool = getPool()
-  const client = await pool.connect()
-  try {
-    await client.query('begin')
-    const summary: Array<{ region_id: string; tiles: number; created: boolean }> = []
-    let createdRegions = 0
+  const summary: Array<{ region_id: string; tiles: number; created: boolean }> = []
+  let createdRegions = 0
 
-    for (const palette of FLOOR_PALETTES) {
-      const deduped = uniq(palette.tiles)
-      const paletteJson = JSON.stringify(deduped)
-
-      const existingRegion = await client.query<{ id: string }>(
-        `select id from world.world_regions where id = $1`,
-        [palette.region_id],
-      )
-
-      if (existingRegion.rowCount === 0) {
-        await client.query(
-          `insert into world.world_regions
-             (id, name, description, floor_tribe, floor_index,
-              biome_theme, floor_palette_json)
-           values ($1, $2, $3, $4, $5, $6, $7)`,
-          [
-            palette.region_id,
-            palette.region_id.replace(/^floor\d_/, '').replace(/_/g, ' '),
-            `Starter floor ${palette.floor_index} (${palette.floor_tribe})`,
-            palette.floor_tribe,
-            palette.floor_index,
-            palette.biome_theme,
-            paletteJson,
-          ],
-        )
-        createdRegions++
-        summary.push({ region_id: palette.region_id, tiles: deduped.length, created: true })
-      } else {
-        await client.query(
-          `update world.world_regions
-              set floor_tribe = $2,
-                  floor_index = $3,
-                  biome_theme = $4,
-                  floor_palette_json = $5
-            where id = $1`,
-          [
-            palette.region_id,
-            palette.floor_tribe,
-            palette.floor_index,
-            palette.biome_theme,
-            paletteJson,
-          ],
-        )
-        summary.push({ region_id: palette.region_id, tiles: deduped.length, created: false })
-      }
+  for (const palette of FLOOR_PALETTES) {
+    const deduped = uniq(palette.tiles)
+    const existing = await getEntity('region', palette.region_id)
+    const patch = {
+      floor_tribe: palette.floor_tribe,
+      floor_index: palette.floor_index,
+      biome_theme: palette.biome_theme,
+      floor_palette: deduped,
     }
-
-    await client.query('commit')
-    return {
-      ok: true,
-      created_regions: createdRegions,
-      regions: summary,
-      message:
-        `Seeded ${createdRegions} new floor region(s); ` +
-        `updated ${summary.length - createdRegions} existing. ` +
-        `${summary.length} palette(s) total.`,
+    if (!existing) {
+      await upsertEntity('region', palette.region_id, {
+        name: palette.region_id.replace(/^floor\d_/, '').replace(/_/g, ' '),
+        description: `Starter floor ${palette.floor_index} (${palette.floor_tribe})`,
+        ...patch,
+      })
+      createdRegions++
+      summary.push({ region_id: palette.region_id, tiles: deduped.length, created: true })
+    } else {
+      await upsertEntity('region', palette.region_id, { ...existing.doc, ...patch }, existing.parent_id)
+      summary.push({ region_id: palette.region_id, tiles: deduped.length, created: false })
     }
-  } catch (e) {
-    await client.query('rollback')
-    throw e
-  } finally {
-    client.release()
+  }
+
+  return {
+    ok: true,
+    created_regions: createdRegions,
+    regions: summary,
+    message:
+      `Seeded ${createdRegions} new floor region(s); ` +
+      `updated ${summary.length - createdRegions} existing. ` +
+      `${summary.length} palette(s) total.`,
   }
 })

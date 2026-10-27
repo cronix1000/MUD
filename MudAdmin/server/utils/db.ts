@@ -72,6 +72,7 @@ export interface ColumnInfo {
   dflt_value: unknown
   pk: 0 | 1
   is_identity: 0 | 1
+  fk: { schema: string; table: string; column: string } | null
 }
 
 function schemaFor(table: string): 'world' | 'players' | '_meta' {
@@ -90,15 +91,49 @@ export async function getColumns(table: string): Promise<ColumnInfo[]> {
     is_nullable: 'YES' | 'NO'
     column_default: string | null
     attidentity: string
+    is_pk: number
+    fk_schema: string | null
+    fk_table: string | null
+    fk_column: string | null
   }>(
-    `SELECT c.ordinal_position, c.column_name, c.data_type, c.is_nullable, c.column_default,
-            COALESCE(a.attidentity, '') AS attidentity
-       FROM information_schema.columns c
-       LEFT JOIN pg_attribute a
-         ON a.attrelid = (c.table_schema || '.' || c.table_name)::regclass
-        AND a.attname = c.column_name
-      WHERE c.table_schema = $1 AND c.table_name = $2
-      ORDER BY c.ordinal_position`,
+    `WITH t AS (
+         SELECT ($1::text || '.' || $2::text)::regclass AS relid,
+                $1::text AS schema_name,
+                $2::text AS table_name
+       ),
+       cols AS (
+         SELECT c.ordinal_position, c.column_name, c.data_type, c.is_nullable, c.column_default,
+                a.attnum, a.attidentity,
+                (SELECT 1
+                  FROM pg_index i
+                 WHERE i.indrelid = t.relid
+                   AND a.attnum = ANY(i.indkey)
+                   AND i.indisprimary
+                 LIMIT 1) AS is_pk
+           FROM information_schema.columns c
+           CROSS JOIN t
+           LEFT JOIN pg_attribute a
+             ON a.attrelid = t.relid
+            AND a.attname = c.column_name
+          WHERE c.table_schema = t.schema_name AND c.table_name = t.table_name
+       )
+       SELECT cols.ordinal_position, cols.column_name, cols.data_type, cols.is_nullable,
+              cols.column_default, COALESCE(cols.attidentity, '') AS attidentity,
+              COALESCE(cols.is_pk, 0) AS is_pk,
+              fk.fk_schema, fk.fk_table, fk.fk_column
+         FROM cols
+         LEFT JOIN LATERAL (
+           SELECT n.nspname AS fk_schema, ct.relname AS fk_table, ca.attname AS fk_column
+             FROM pg_constraint con
+             JOIN pg_class ct ON ct.oid = con.confrelid
+             JOIN pg_namespace n ON n.oid = ct.relnamespace
+             JOIN pg_attribute ca ON ca.attrelid = con.confrelid AND ca.attnum = con.confkey[1]
+            WHERE con.conrelid = (SELECT relid FROM t)
+              AND con.contype = 'f'
+              AND ca.attname = cols.column_name
+            LIMIT 1
+         ) fk ON true
+        ORDER BY cols.ordinal_position`,
     [schema, table],
   )
   return res.rows.map((r) => ({
@@ -107,8 +142,11 @@ export async function getColumns(table: string): Promise<ColumnInfo[]> {
     type: r.data_type,
     notnull: r.is_nullable === 'NO' ? 1 : 0,
     dflt_value: r.column_default,
-    pk: 0,
+    pk: (r.is_pk ? 1 : 0) as 0 | 1,
     is_identity: r.attidentity === 'a' || r.attidentity === 'd' ? 1 : 0,
+    fk: r.fk_schema && r.fk_table && r.fk_column
+      ? { schema: r.fk_schema, table: r.fk_table, column: r.fk_column }
+      : null,
   }))
 }
 
@@ -195,17 +233,12 @@ export async function insertRow(table: string, body: Record<string, unknown>) {
   }
 
   const requiredPkFields = pkFields.filter((f) => {
-    if (spec) return true
     const col = cols.find((c) => c.name === f)
     if (!col) return true
     return !isAutoIntColumn(col)
   })
   for (const f of requiredPkFields) {
     if (payload[f] === undefined) {
-      if (table === 'world_rooms' && f === 'room_id' && typeof payload.region_id === 'string') {
-        payload.room_id = await assignNextRoomId(payload.region_id)
-        continue
-      }
       throw createError({ statusCode: 400, statusMessage: `Missing PK field(s) for ${table}: ${f}` })
     }
   }
@@ -223,19 +256,15 @@ export async function insertRow(table: string, body: Record<string, unknown>) {
 
   const placeholders = validKeys.map((_, i) => `$${i + 1}`).join(', ')
   const hasJsonb = validKeys.some((k) => isJsonColumn(k))
-  const returningClause = singlePk && !validKeys.includes(singlePk) ? ` RETURNING ${singlePk}` : ''
+  const returningCol = singlePk
+    || (spec ? spec.fields.find((f) => cols.find((c) => c.name === f && isAutoIntColumn(c))) : null)
+  const returningClause = returningCol && !validKeys.includes(returningCol) ? ` RETURNING ${returningCol}` : ''
   const sql = `insert into ${qualified(table)} (${validKeys.join(', ')}) values (${placeholders})${returningClause}`
   const values = validKeys.map((k) => payload[k])
 
-  const autoAssignedRoomId = table === 'world_rooms' && typeof payload.room_id === 'number'
-
-  if (autoAssignedRoomId) {
-    return await insertWorldRoomWithAutoId(payload, validKeys, hasJsonb)
-  }
-
   try {
     const res = await getPool().query(sql, values)
-    return { id: res.rows[0]?.[singlePk ?? ''] ?? null, changes: res.rowCount ?? 0, _hasJsonb: hasJsonb }
+    return { id: res.rows[0]?.[returningCol ?? ''] ?? null, changes: res.rowCount ?? 0, _hasJsonb: hasJsonb }
   } catch (err: unknown) {
     const e = err as { code?: string; constraint?: string; message?: string }
     if (e?.code === '23505') {
@@ -258,55 +287,6 @@ export async function insertRow(table: string, body: Record<string, unknown>) {
     }
     throw err
   }
-}
-
-async function insertWorldRoomWithAutoId(
-  payload: Record<string, unknown>,
-  validKeys: string[],
-  hasJsonb: boolean,
-): Promise<{ id: unknown; changes: number; _hasJsonb: boolean }> {
-  const pool = getPool()
-  const region_id = String(payload.region_id ?? '')
-  const otherCols = validKeys.filter((k) => k !== 'region_id' && k !== 'room_id')
-  const otherPlaceholders = otherCols.map((_, i) => `$${i + 3}`).join(', ')
-  const insertSql = `INSERT INTO world.world_rooms (region_id, room_id${otherCols.length ? ', ' + otherCols.join(', ') : ''})
-                     VALUES ($1, $2${otherCols.length ? ', ' + otherPlaceholders : ''})
-                     RETURNING room_id`
-
-  let lastErr: unknown = null
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const client = await pool.connect()
-    try {
-      await client.query('BEGIN ISOLATION LEVEL READ COMMITTED')
-      const next = await client.query<{ id: number }>(
-        `SELECT COALESCE(MAX(room_id), 0) + 1 AS id
-           FROM world.world_rooms
-          WHERE region_id = $1
-          FOR UPDATE`,
-        [region_id],
-      )
-      const id = Number(next.rows[0]?.id ?? 1)
-      if (!Number.isSafeInteger(id) || id > 2_147_483_647) {
-        throw createError({ statusCode: 400, statusMessage: `No free room_id in region ${region_id}` })
-      }
-      const params = [region_id, id, ...otherCols.map((k) => payload[k])]
-      const res = await client.query(insertSql, params)
-      await client.query('COMMIT')
-      return {
-        id: res.rows[0]?.room_id ?? id,
-        changes: res.rowCount ?? 0,
-        _hasJsonb: hasJsonb,
-      }
-    } catch (err) {
-      await client.query('ROLLBACK').catch(() => {})
-      lastErr = err
-      const e = err as { code?: string }
-      if (e?.code !== '23505') throw err
-    } finally {
-      client.release()
-    }
-  }
-  throw lastErr instanceof Error ? lastErr : new Error('Failed to insert world_room after retries')
 }
 
 async function findExistingByPk(table: string, fields: string[], payload: Record<string, unknown>): Promise<Record<string, unknown> | null> {
@@ -386,6 +366,11 @@ function isJsonColumn(name: string): boolean {
   return name.endsWith('_json')
 }
 
+function isJsonType(type: string): boolean {
+  const t = type.toUpperCase()
+  return t === 'JSON' || t === 'JSONB'
+}
+
 function isAutoIntColumn(col: ColumnInfo): boolean {
   if (col.is_identity === 1) return true
   const t = col.type.toLowerCase()
@@ -403,17 +388,25 @@ async function coercePayload(table: string, body: Record<string, unknown>): Prom
     const col = colByName.get(key)
     if (!col) continue
     if (raw === null) { out[key] = null; continue }
-    if (isJsonColumn(col.name)) {
+    if (isJsonColumn(col.name) || isJsonType(col.type)) {
+      let normalized: string
       if (typeof raw === 'string') {
+        if (raw.trim() === '') {
+          out[key] = null
+          continue
+        }
         try {
           JSON.parse(raw)
-          out[key] = raw
+          normalized = raw
         } catch {
           throw createError({ statusCode: 400, statusMessage: `Column ${col.name} must be valid JSON` })
         }
+      } else if (raw && typeof raw === 'object') {
+        normalized = JSON.stringify(raw)
       } else {
-        out[key] = JSON.stringify(raw)
+        normalized = JSON.stringify(raw)
       }
+      out[key] = normalized
       continue
     }
     const upper = col.type.toUpperCase()
@@ -443,36 +436,6 @@ export async function closePool(): Promise<void> {
     await _pool.end()
     _pool = null
   }
-}
-
-async function assignNextRoomId(region_id: string): Promise<number> {
-  const pool = getPool()
-  let lastErr: unknown = null
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const client = await pool.connect()
-    try {
-      await client.query('BEGIN ISOLATION LEVEL READ COMMITTED')
-      const next = await client.query<{ id: number }>(
-        `SELECT COALESCE(MAX(room_id), 0) + 1 AS id
-           FROM world.world_rooms
-          WHERE region_id = $1
-          FOR UPDATE`,
-        [region_id],
-      )
-      const id = Number(next.rows[0]?.id ?? 1)
-      if (!Number.isSafeInteger(id) || id > 2_147_483_647) {
-        throw createError({ statusCode: 400, statusMessage: `No free room_id in region ${region_id}` })
-      }
-      await client.query('COMMIT')
-      return id
-    } catch (err) {
-      await client.query('ROLLBACK').catch(() => {})
-      lastErr = err
-    } finally {
-      client.release()
-    }
-  }
-  throw lastErr instanceof Error ? lastErr : new Error('Failed to assign room_id')
 }
 
 async function assertExitTargetExists(

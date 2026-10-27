@@ -6,20 +6,22 @@ export default defineEventHandler(async () => {
     const res = await pool.query<{ c: string }>(sql, params)
     return Number(res.rows[0]?.c ?? 0)
   }
+  const countEntities = async (type: string) =>
+    count(`select count(*) as c from world.entities where entity_type = $1`, type)
 
   return {
-    regions: await count(`select count(*) as c from world.world_regions`),
+    regions: await countEntities('region'),
     exits: await count(`select count(*) as c from world.world_room_exits`),
     spawns: await count(`select count(*) as c from world.world_room_spawns`),
-    mobs: await count(`select count(*) as c from world.world_mobs`),
-    npc_mobs: await count(`select count(*) as c from world.world_mobs where ai = 'passive_npc'`),
-    items: await count(`select count(*) as c from world.world_items`),
-    interactables: await count(`select count(*) as c from world.world_interactables`),
-    loot_tables: await count(`select count(*) as c from world.world_loot_tables`),
-    skills: await count(`select count(*) as c from world.world_skills`),
-    quests: await count(`select count(*) as c from world.world_quests`),
-    recipes: await count(`select count(*) as c from world.world_recipes`),
-    dialogues: await count(`select count(*) as c from world.world_dialogues`),
+    mobs: await countEntities('mob'),
+    npc_mobs: await count(`select count(*) as c from world.entities where entity_type = 'mob' and doc->>'ai' = 'passive_npc'`),
+    items: await countEntities('item'),
+    interactables: await countEntities('interactable'),
+    loot_tables: await countEntities('loot_table'),
+    skills: await countEntities('skill'),
+    quests: await countEntities('quest'),
+    recipes: await countEntities('recipe'),
+    dialogues: await countEntities('dialogue'),
     players: await count(`select count(*) as c from players.player_players`),
   }
 })

@@ -13,7 +13,10 @@ export default defineEventHandler(async (event) => {
   const fromRoomId = Number.isFinite(Number(from_room_id_raw)) ? Math.trunc(Number(from_room_id_raw)) : null
 
   const used = (await pool.query(
-    `select room_id from world.world_rooms where region_id = $1 order by room_id asc`,
+    `select (doc->>'room_id')::int as room_id
+       from world.entities
+      where entity_type = 'room' and doc->>'region_id' = $1
+      order by room_id asc`,
     [region_id]
   )).rows.map((r) => Number(r.room_id))
 

@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { encodeCompositeKey } from '~/utils/composite-key'
-import { computeGraphLayout, computeGraphViewBox, graphEdges, type GraphRoom, type GraphExit } from '~/utils/roomGraph'
+import { computeGraphLayout, type GraphRoom, type GraphExit } from '~/utils/roomGraph'
 import { resolveWikiId } from '~/utils/wikiId'
 import ScriptPicker from './ScriptPicker.vue'
 
@@ -45,12 +44,12 @@ interface ScriptRef {
 }
 
 const props = defineProps<{
-  compositeKey: string
+  entityId: string
 }>()
 
 const emit = defineEmits<{ close: [] }>()
 
-interface RoomRow {
+interface RoomDoc {
   region_id: string
   room_id: number
   name: string
@@ -58,12 +57,37 @@ interface RoomRow {
   terrain: string | null
   width: number | null
   height: number | null
-  layout_json: string | null
+  layout: string[]
   spawn_x: number | null
   spawn_y: number | null
-  scripts_json: string | null
-  extra_json: string | null
+  scripts: ScriptRef | null
+  rules: Record<string, unknown> | null
+  meta: Record<string, unknown> | null
   zone_id: number | null
+  exits: Record<string, Record<string, unknown>> | null
+  spawns: Array<Record<string, unknown>> | null
+  [key: string]: unknown
+}
+
+interface RoomView {
+  region_id: string
+  room_id: number
+  name: string
+  description: string | null
+  terrain: string | null
+  width: number | null
+  height: number | null
+  layout: string[]
+  spawn_x: number | null
+  spawn_y: number | null
+  scripts: ScriptRef | null
+  rules: Record<string, unknown> | null
+  meta: Record<string, unknown> | null
+  zone_id: number | null
+  exits: Record<string, Record<string, unknown>>
+  spawns: Array<Record<string, unknown>>
+  parent_id: string | null
+  doc: Record<string, unknown>
 }
 
 interface ZoneRow {
@@ -72,42 +96,71 @@ interface ZoneRow {
   name: string
 }
 
-interface ColumnInfo { name: string; type: string; pk: number; dflt_value: unknown; notnull: number }
-
-const split = computed(() => decodeURIComponent(props.compositeKey).split('::'))
+const split = computed(() => decodeURIComponent(props.entityId).split('::'))
 const regionId = computed(() => split.value[0] ?? '')
 const roomId = computed(() => Number(split.value[1] ?? 0))
 
-const { data: roomData, refresh: refreshRoom } = await useFetch<{ columns: ColumnInfo[]; rows: Record<string, unknown>[] }>(
-  () => `/api/tables/world_rooms`,
+const { data: roomsData, refresh: refreshRooms } = await useFetch<{
+  rows: Array<{ entity_id: string; doc: Record<string, unknown>; parent_id: string | null }>
+}>(() => `/api/entities/room`, { query: { limit: 500 } })
+const { data: terrainsData } = await useFetch<{ rows: Array<{ entity_id: string; doc: Record<string, unknown> }> }>(`/api/entities/terrain`, { query: { limit: 500 } })
+
+const terrainRows = computed<TerrainRow[]>(() =>
+  (terrainsData.value?.rows ?? []).map((r) => ({
+    symbol: String(r.doc.symbol ?? r.entity_id),
+    name: String(r.doc.name ?? ''),
+    color: r.doc.color == null ? null : String(r.doc.color),
+  })),
 )
-const { data: terrainsData } = await useFetch<{ rows: TerrainRow[] }>(`/api/tables/world_terrains`)
-const { data: exitsData, refresh: refreshExits } = await useFetch<{ rows: Array<Record<string, unknown>> }>(
-  `/api/tables/world_room_exits`,
-)
-const { data: spawnsData, refresh: refreshSpawns } = await useFetch<{ rows: Array<Record<string, unknown>> }>(
-  `/api/tables/world_room_spawns`,
-)
-const { data: zonesData } = await useFetch<{ rows: ZoneRow[] }>('/api/tables/world_zones')
+const { data: zonesData } = await useFetch<{
+  rows: Array<{ entity_id: string; doc: Record<string, unknown> }>
+}>('/api/entities/zone')
 const zonesInRegion = computed<ZoneRow[]>(() =>
-  (zonesData.value?.rows ?? []).filter((z) => z.region_id === regionId.value),
+  (zonesData.value?.rows ?? [])
+    .filter((z) => String(z.doc.region_id ?? '') === regionId.value)
+    .map((z) => ({
+      region_id: String(z.doc.region_id ?? ''),
+      zone_id: Number(z.doc.zone_id ?? 0),
+      name: String(z.doc.name ?? ''),
+    })),
 )
 
-const room = computed<RoomRow | undefined>(() => {
-  const rows = roomData.value?.rows ?? []
-  return rows.find(
-    (r) =>
-      String(r.region_id) === regionId.value &&
-      Number(r.room_id) === roomId.value,
-  ) as RoomRow | undefined
+const rooms = computed<RoomView[]>(() =>
+  (roomsData.value?.rows ?? []).map((r) => {
+    const d = r.doc as RoomDoc
+    return {
+      region_id: String(d.region_id ?? ''),
+      room_id: Number(d.room_id ?? 0),
+      name: String(d.name ?? ''),
+      description: d.description ?? null,
+      terrain: d.terrain ?? null,
+      width: d.width ?? null,
+      height: d.height ?? null,
+      layout: Array.isArray(d.layout) ? d.layout.map(String) : [],
+      spawn_x: d.spawn_x ?? null,
+      spawn_y: d.spawn_y ?? null,
+      scripts: (d.scripts as ScriptRef | null) ?? null,
+      rules: d.rules ?? null,
+      meta: d.meta ?? null,
+      zone_id: d.zone_id ?? null,
+      exits: (d.exits as Record<string, Record<string, unknown>>) ?? {},
+      spawns: Array.isArray(d.spawns) ? d.spawns : [],
+      parent_id: r.parent_id,
+      doc: r.doc,
+    }
+  }),
+)
+
+const room = computed<RoomView | undefined>(() => {
+  return rooms.value.find(
+    (r) => r.region_id === regionId.value && r.room_id === roomId.value,
+  )
 })
 
 const regionRoomIds = computed<Set<number>>(() => {
   const set = new Set<number>()
-  for (const r of roomData.value?.rows ?? []) {
-    if (String(r.region_id) === regionId.value) {
-      set.add(Number(r.room_id))
-    }
+  for (const r of rooms.value) {
+    if (r.region_id === regionId.value) set.add(r.room_id)
   }
   return set
 })
@@ -129,15 +182,14 @@ function exitStatus(e: ExitRow): 'ok' | 'self_loop' | 'invalid' {
 }
 
 function roomNameFor(targetRoomId: number): string | null {
-  const rows = roomData.value?.rows ?? []
-  const r = rows.find(
-    (x) => String(x.region_id) === regionId.value && Number(x.room_id) === targetRoomId,
-  ) as RoomRow | undefined
+  const r = rooms.value.find(
+    (x) => x.region_id === regionId.value && x.room_id === targetRoomId,
+  )
   return r?.name ?? null
 }
 
 const terrainsInWorld = computed<TerrainRow[]>(() => {
-  return terrainsData.value?.rows ?? []
+  return terrainRows.value
 })
 
 const palette = computed(() => {
@@ -167,25 +219,16 @@ watchEffect(() => {
   draft.terrain = room.value.terrain ?? ''
   draft.width = room.value.width ?? 0
   draft.height = room.value.height ?? 0
-  try {
-    const parsed = JSON.parse(room.value.layout_json ?? '[]')
-    draft.layout = Array.isArray(parsed) ? parsed.map(String) : []
-  } catch {
-    draft.layout = []
-  }
+  draft.layout = room.value.layout.length ? [...room.value.layout] : []
   draft.spawn_x = room.value.spawn_x ?? 0
   draft.spawn_y = room.value.spawn_y ?? 0
-  draft.extra_json = room.value.extra_json ?? '{}'
+  draft.extra_json = room.value.rules ? JSON.stringify(room.value.rules) : '{}'
   draft.zone_id = room.value.zone_id ?? 0
-  try {
-    const s = JSON.parse(room.value.scripts_json ?? '{}')
-    scripts.value = {
-      on_enter: s.on_enter ?? null,
-      on_exit: s.on_exit ?? null,
-      on_pulse: s.on_pulse ?? s.pulse ?? null,
-    }
-  } catch {
-    scripts.value = { on_enter: null, on_exit: null, on_pulse: null }
+  const s = room.value.scripts
+  scripts.value = {
+    on_enter: s?.on_enter ?? null,
+    on_exit: s?.on_exit ?? null,
+    on_pulse: s?.on_pulse ?? null,
   }
 })
 
@@ -246,25 +289,19 @@ function onIdentityEnter(field: 'width' | 'height') {
 
 const exits = ref<ExitRow[]>([])
 watchEffect(() => {
-  if (!exitsData.value) return
-  exits.value = (exitsData.value.rows as Array<Record<string, unknown>>)
-    .filter(
-      (e) =>
-        String(e.region_id) === regionId.value &&
-        Number(e.from_room_id) === roomId.value,
-    )
-    .map((e) => ({
-      id: Number(e.id),
-      direction: String(e.direction),
-      target_room: Number(e.to_room_id),
-      _targetRoomInput: String(e.to_room_id),
-      dest_x: Number(e.dest_x ?? -1),
-      dest_y: Number(e.dest_y ?? -1),
-      is_portal: Boolean(e.is_portal),
-      portal_name: String(e.portal_name ?? ''),
-      auto_trigger: Boolean(e.auto_trigger ?? true),
-      is_one_way: Boolean(e.is_one_way),
-    }))
+  if (!room.value) return
+  const exitMap = room.value.exits ?? {}
+  exits.value = Object.entries(exitMap).map(([direction, e]) => ({
+    direction,
+    target_room: Number(e.target_room ?? 0),
+    _targetRoomInput: String(e.target_room ?? ''),
+    dest_x: Number(e.dest_x ?? -1),
+    dest_y: Number(e.dest_y ?? -1),
+    is_portal: Boolean(e.is_portal),
+    portal_name: String(e.portal_name ?? ''),
+    auto_trigger: e.auto_trigger === undefined ? true : Boolean(e.auto_trigger),
+    is_one_way: Boolean(e.is_one_way),
+  }))
 })
 
 const OPPOSITE_DIR: Record<string, string> = {
@@ -304,32 +341,15 @@ function removeExit(idx: number) {
   else exits.value[idx] = { ...e, _deleted: true }
 }
 
-const { data: graphData } = await useFetch<{ rooms: GraphRoom[]; exits: GraphExit[] }>(
+const { data: graphData, refresh: refreshGraph } = await useFetch<{ rooms: GraphRoom[]; exits: GraphExit[] }>(
   () => `/api/rooms/graph?region_id=${encodeURIComponent(regionId.value)}`,
 )
-
-const MAP_NODE_W = 110
-const MAP_NODE_H = 38
-const MAP_PADDING = 24
 
 const mapLayout = computed(() => {
   const rooms = graphData.value?.rooms ?? []
   const exits = graphData.value?.exits ?? []
   return computeGraphLayout(rooms, exits)
 })
-
-const mapViewBox = computed(() => computeGraphViewBox(mapLayout.value, MAP_NODE_W, MAP_NODE_H, MAP_PADDING))
-
-function mapNodePos(node: ReturnType<typeof mapLayout.value[number]>) {
-  return {
-    cx: mapViewBox.value.ox + (node.x + 0.5) * MAP_NODE_W,
-    cy: mapViewBox.value.oy + (node.y + 0.5) * MAP_NODE_H,
-  }
-}
-
-const mapEdges = computed(() => graphEdges(mapLayout.value, graphData.value?.exits ?? []))
-
-const currentLayoutNode = computed(() => mapLayout.value.find((n) => n.room.room_id === roomId.value))
 
 const neighborInfo = computed(() => {
   const node = currentLayoutNode.value
@@ -346,35 +366,24 @@ const neighborInfo = computed(() => {
 
 const currentSpawns = computed(() => spawns.value.filter((s) => !s._deleted))
 
-function spawnColor(type: string): string {
-  switch (type) {
-    case 'mob': return '#ef4444'
-    case 'npc': return '#06b6d4'
-    case 'item': return '#eab308'
-    case 'interactable': return '#a855f7'
-    default: return '#a3a3a3'
-  }
-}
-
 const spawns = ref<SpawnRow[]>([])
 watchEffect(() => {
-  if (!spawnsData.value) return
-  spawns.value = (spawnsData.value.rows as Array<Record<string, unknown>>)
-    .filter(
-      (s) =>
-        String(s.region_id) === regionId.value &&
-        Number(s.room_id) === roomId.value,
-    )
-    .map((s) => ({
-      id: Number(s.id),
-      x: Number(s.x),
-      y: Number(s.y),
-      type: String(s.type),
-      template_id: String(s.template_id),
+  if (!room.value) return
+  const list = room.value.spawns ?? []
+  spawns.value = list.map((s) => {
+    const ov = s.override
+    return {
+      x: Number(s.x ?? 0),
+      y: Number(s.y ?? 0),
+      type: String(s.type ?? ''),
+      template_id: String(s.template_id ?? ''),
       respawn_time: Number(s.respawn_time ?? 30),
-      is_respawning: Boolean(s.is_respawning ?? true),
-      override_json: String(s.override_json ?? ''),
-    }))
+      is_respawning: s.is_respawning === undefined ? true : Boolean(s.is_respawning),
+      override_json: ov && Object.keys(ov as Record<string, unknown>).length
+        ? JSON.stringify(ov)
+        : '',
+    }
+  })
 })
 
 function addSpawn() {
@@ -427,145 +436,116 @@ async function save() {
   success.value = null
   try {
     syncExitTargetRooms()
-    const key = `${room.value.region_id}::${room.value.room_id}`
-    await $fetch(`/api/tables/world_rooms/${encodeURIComponent(key)}`, {
+    const current = room.value
+
+    const exitsMap: Record<string, Record<string, unknown>> = {}
+    for (const e of exits.value.filter((x) => !x._deleted)) {
+      const exit: Record<string, unknown> = {
+        target_room: Number(e.target_room),
+        dest_x: Number(e.dest_x),
+        dest_y: Number(e.dest_y),
+        is_one_way: Boolean(e.is_one_way),
+        is_portal: Boolean(e.is_portal),
+        auto_trigger: e.auto_trigger !== false,
+      }
+      if (e.portal_name) exit.portal_name = e.portal_name
+      exitsMap[e.direction] = exit
+    }
+
+    const spawnsList = spawns.value
+      .filter((s) => !s._deleted)
+      .map((s) => {
+        let override: Record<string, unknown> = {}
+        if (s.override_json.trim()) {
+          try {
+            const parsed = JSON.parse(s.override_json)
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+              override = parsed as Record<string, unknown>
+            }
+          } catch {
+            throw new Error(`Spawn override for (${s.x},${s.y}) is not valid JSON`)
+          }
+        }
+        return {
+          x: Number(s.x),
+          y: Number(s.y),
+          type: s.type,
+          template_id: resolveWikiId(s.template_id),
+          respawn_time: Number(s.respawn_time),
+          is_respawning: Boolean(s.is_respawning),
+          override,
+        }
+      })
+
+    let rules: Record<string, unknown> | undefined
+    if (draft.extra_json.trim()) {
+      const parsed = JSON.parse(draft.extra_json)
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        rules = parsed as Record<string, unknown>
+      }
+    }
+
+    const doc: Record<string, unknown> = {
+      ...current.doc,
+      region_id: regionId.value,
+      room_id: roomId.value,
+      name: draft.name,
+      description: draft.description ?? '',
+      terrain: draft.terrain || null,
+      width: Number(draft.width),
+      height: Number(draft.height),
+      layout: [...draft.layout],
+      spawn_x: Number(draft.spawn_x),
+      spawn_y: Number(draft.spawn_y),
+      zone_id: Number(draft.zone_id ?? 0),
+      scripts: { ...scripts.value },
+      exits: exitsMap,
+      spawns: spawnsList,
+    }
+    if (rules) doc.rules = rules
+    else delete doc.rules
+
+    const key = `${regionId.value}::${roomId.value}`
+    await $fetch(`/api/entities/room/${encodeURIComponent(key)}`, {
       method: 'PUT',
-      body: {
-        name: draft.name,
-        description: draft.description,
-        terrain: draft.terrain || null,
-        width: draft.width,
-        height: draft.height,
-        layout_json: JSON.stringify(draft.layout),
-        spawn_x: draft.spawn_x,
-        spawn_y: draft.spawn_y,
-        scripts_json: JSON.stringify(scripts.value),
-        extra_json: draft.extra_json,
-        zone_id: draft.zone_id,
-      },
+      body: { doc, parent_id: current.parent_id },
     })
 
-    for (const e of exits.value.filter((x) => x._deleted)) {
-      if (e.id) {
-        await $fetch(`/api/tables/world_room_exits/${e.id}`, { method: 'DELETE' })
-      }
-    }
-    for (const e of exits.value.filter((x) => !x._deleted && x._isNew)) {
-      await $fetch(`/api/tables/world_room_exits`, {
-        method: 'POST',
-        body: {
-          region_id: regionId.value,
-          from_room_id: roomId.value,
-          direction: e.direction,
-          to_room_id: e.target_room,
-          dest_x: e.dest_x,
-          dest_y: e.dest_y,
-          is_portal: e.is_portal ? 1 : 0,
-          portal_name: e.portal_name,
-          auto_trigger: e.auto_trigger ? 1 : 0,
-          is_one_way: e.is_one_way ? 1 : 0,
-        },
-      })
-    }
-    for (const e of exits.value.filter((x) => !x._deleted && !x._isNew)) {
-      if (!e.id) continue
-      await $fetch(`/api/tables/world_room_exits/${e.id}`, {
-        method: 'PUT',
-        body: {
-          direction: e.direction,
-          to_room_id: e.target_room,
-          dest_x: e.dest_x,
-          dest_y: e.dest_y,
-          is_portal: e.is_portal ? 1 : 0,
-          portal_name: e.portal_name,
-          auto_trigger: e.auto_trigger ? 1 : 0,
-          is_one_way: e.is_one_way ? 1 : 0,
-        },
-      })
-    }
-
     const newForwards = exits.value.filter((x) => !x._deleted && x._isNew && !x.is_one_way)
-    if (newForwards.length) {
-      const latest = await $fetch<{ rows: Array<{ from_room_id: number; direction: string; to_room_id: number }> }>(
-        `/api/tables/world_room_exits`,
-        { query: { q: JSON.stringify({ region_id: regionId.value }), limit: 1000 } },
-      )
-      for (const f of newForwards) {
-        const ret = OPPOSITE_DIR[f.direction]
-        if (!ret) continue
-        if (Number(f.target_room) === roomId.value) continue
-        const exists = latest.rows.some(
-          (r) =>
-            Number(r.from_room_id) === Number(f.target_room) &&
-            String(r.direction) === ret &&
-            Number(r.to_room_id) === roomId.value,
-        )
-        if (exists) continue
-        try {
-          await $fetch(`/api/tables/world_room_exits`, {
-            method: 'POST',
-            body: {
-              region_id: regionId.value,
-              from_room_id: Number(f.target_room),
-              direction: ret,
-              to_room_id: roomId.value,
-              dest_x: room.value?.spawn_x ?? -1,
-              dest_y: room.value?.spawn_y ?? -1,
-              is_portal: 0,
-              portal_name: '',
-              auto_trigger: 1,
-              is_one_way: 0,
-            },
-          })
-        } catch {
+    for (const f of newForwards) {
+      const ret = OPPOSITE_DIR[f.direction]
+      if (!ret) continue
+      if (Number(f.target_room) === roomId.value) continue
+      const targetKey = `${regionId.value}::${f.target_room}`
+      const target = await $fetch<{ record: { doc: Record<string, unknown>; parent_id: string | null } }>(
+        `/api/entities/room/${encodeURIComponent(targetKey)}`,
+      ).catch(() => null)
+      if (!target) continue
+      const targetDoc = { ...target.record.doc }
+      const targetExits = (targetDoc.exits as Record<string, Record<string, unknown>>) ?? {}
+      if (!targetExits[ret]) {
+        targetExits[ret] = {
+          target_room: roomId.value,
+          dest_x: Number(current.spawn_x ?? -1),
+          dest_y: Number(current.spawn_y ?? -1),
+          is_one_way: false,
+          is_portal: false,
+          auto_trigger: true,
         }
+        targetDoc.exits = targetExits
+        await $fetch(`/api/entities/room/${encodeURIComponent(targetKey)}`, {
+          method: 'PUT',
+          body: { doc: targetDoc, parent_id: target.record.parent_id },
+        }).catch(() => {})
       }
-    }
-
-    for (const s of spawns.value.filter((x) => x._deleted)) {
-      if (s.id) {
-        await $fetch(`/api/tables/world_room_spawns/${s.id}`, { method: 'DELETE' })
-      }
-    }
-    for (const s of spawns.value.filter((x) => !x._deleted && x._isNew)) {
-      await $fetch(`/api/tables/world_room_spawns`, {
-        method: 'POST',
-        body: {
-          region_id: regionId.value,
-          room_id: roomId.value,
-          x: s.x,
-          y: s.y,
-          type: s.type,
-          template_id: resolveWikiId(s.template_id),
-          respawn_time: s.respawn_time,
-          is_respawning: s.is_respawning ? 1 : 0,
-          override_json: s.override_json || null,
-        },
-      })
-    }
-    for (const s of spawns.value.filter((x) => !x._deleted && !x._isNew)) {
-      if (!s.id) continue
-      await $fetch(`/api/tables/world_room_spawns/${s.id}`, {
-        method: 'PUT',
-        body: {
-          x: s.x,
-          y: s.y,
-          type: s.type,
-          template_id: resolveWikiId(s.template_id),
-          respawn_time: s.respawn_time,
-          is_respawning: s.is_respawning ? 1 : 0,
-          override_json: s.override_json || null,
-        },
-      })
     }
 
     success.value = 'Saved.'
-    await refreshRoom()
-    await refreshExits()
-    await refreshSpawns()
+    await refreshRooms()
+    await refreshGraph()
   } catch (e: unknown) {
-    const err = e as { data?: { statusMessage?: string } }
-    error.value = err.data?.statusMessage ?? 'Save failed'
+    const err = e as { data?: { statusMessage?: string }; message?: string }
+    error.value = err.data?.statusMessage ?? err.message ?? 'Save failed'
   } finally {
     saving.value = false
   }
@@ -577,6 +557,122 @@ const unrecognizedInLayout = computed(() => {
   for (const row of draft.layout) for (const c of row) if (c !== ' ') used.add(c)
   return [...used].filter((c) => !recognizedSymbols.value.has(c))
 })
+
+const gridRooms = computed(() =>
+  rooms.value.map((r) => ({
+    room_id: r.room_id,
+    name: r.name,
+    zone_id: r.zone_id,
+    width: r.width,
+    height: r.height,
+    layout: r.layout,
+    spawns: r.spawns.map((s) => ({
+      x: Number(s.x ?? 0),
+      y: Number(s.y ?? 0),
+      type: String(s.type ?? ''),
+      template_id: s.template_id == null ? null : String(s.template_id),
+    })),
+  })),
+)
+
+async function createRoomFrom(fromRoomId: number | null, direction: string | null) {
+  error.value = null
+  try {
+    const suggested = await $fetch<{ suggested_room_id: number }>('/api/rooms/next-free-id', {
+      query: { region_id: regionId.value },
+    })
+    const newId = Number(suggested.suggested_room_id)
+    if (!Number.isSafeInteger(newId) || newId <= 0) {
+      throw new Error('could not determine the next free room id')
+    }
+    const source = fromRoomId === null ? null : rooms.value.find((r) => r.room_id === fromRoomId) ?? null
+    const newExits: Record<string, Record<string, unknown>> = {}
+    if (source && direction) {
+      const ret = OPPOSITE_DIR[direction]
+      if (ret) {
+        newExits[ret] = {
+          target_room: fromRoomId,
+          dest_x: Number(source.spawn_x ?? -1),
+          dest_y: Number(source.spawn_y ?? -1),
+          is_one_way: false,
+          is_portal: false,
+          auto_trigger: true,
+        }
+      }
+    }
+    const w = 10
+    const h = 8
+    const doc: Record<string, unknown> = {
+      region_id: regionId.value,
+      room_id: newId,
+      name: 'New Room',
+      description: '',
+      terrain: source?.terrain ?? null,
+      width: w,
+      height: h,
+      layout: Array.from({ length: h }, () => '.'.repeat(w)),
+      spawn_x: 0,
+      spawn_y: 0,
+      zone_id: Number(source?.zone_id ?? 0),
+      scripts: {},
+      exits: newExits,
+      spawns: [],
+    }
+    await $fetch('/api/entities/room', {
+      method: 'POST',
+      body: { id: `${regionId.value}::${newId}`, doc },
+    })
+
+    if (source && direction) {
+      const target = await $fetch<{ record: { doc: Record<string, unknown>; parent_id: string | null } }>(
+        `/api/entities/room/${encodeURIComponent(`${regionId.value}::${fromRoomId}`)}`,
+      ).catch(() => null)
+      if (target) {
+        const targetDoc = { ...target.record.doc }
+        const targetExits = (targetDoc.exits as Record<string, Record<string, unknown>>) ?? {}
+        targetExits[direction] = {
+          target_room: newId,
+          dest_x: -1,
+          dest_y: -1,
+          is_one_way: false,
+          is_portal: false,
+          auto_trigger: true,
+        }
+        targetDoc.exits = targetExits
+        await $fetch(`/api/entities/room/${encodeURIComponent(`${regionId.value}::${fromRoomId}`)}`, {
+          method: 'PUT',
+          body: { doc: targetDoc, parent_id: target.record.parent_id },
+        }).catch(() => {})
+      }
+      if (fromRoomId === roomId.value) {
+        exits.value.push({
+          direction,
+          target_room: newId,
+          _targetRoomInput: String(newId),
+          dest_x: -1,
+          dest_y: -1,
+          is_portal: false,
+          portal_name: '',
+          auto_trigger: true,
+          is_one_way: false,
+        })
+      }
+    }
+
+    if (roomsData.value) {
+      roomsData.value.rows.push({
+        entity_id: `${regionId.value}::${newId}`,
+        doc: doc,
+        parent_id: null,
+      })
+    }
+    await refreshGraph()
+    success.value = `Room #${newId} created${source && direction ? ` ${direction} of #${fromRoomId}` : ''}.`
+  } catch (e: unknown) {
+    const err = e as { data?: { statusMessage?: string }; message?: string }
+    error.value = err.data?.statusMessage ?? err.message ?? 'Create failed'
+  }
+}
 </script>
 
 <template>
@@ -722,124 +818,16 @@ const unrecognizedInLayout = computed(() => {
         No rooms in this region yet.
       </div>
 
-      <div v-else class="bg-neutral-900 border border-neutral-800 rounded p-2 overflow-auto">
-        <svg
-          :viewBox="`0 0 ${mapViewBox.width} ${mapViewBox.height}`"
-          :width="mapViewBox.width"
-          :height="mapViewBox.height"
-          xmlns="http://www.w3.org/2000/svg"
-          style="background:#0a0a0a; max-width:100%; height:auto;"
-        >
-          <g>
-            <line
-              v-for="(edge, i) in mapEdges"
-              :key="i"
-              :x1="mapNodePos(edge.from).cx"
-              :y1="mapNodePos(edge.from).cy"
-              :x2="mapNodePos(edge.to).cx"
-              :y2="mapNodePos(edge.to).cy"
-              :stroke="edge.e.is_portal ? '#a855f7' : '#525252'"
-              :stroke-dasharray="edge.e.is_one_way ? '4 3' : ''"
-              stroke-width="1.5"
-            />
-          </g>
-          <g>
-            <template v-for="n in mapLayout" :key="n.room.room_id">
-              <NuxtLink
-                v-if="n.room.room_id !== roomId"
-                :to="`/world_rooms/${encodeURIComponent(encodeCompositeKey('world_rooms', { region_id: n.room.region_id, room_id: n.room.room_id } as Record<string, unknown>))}`"
-              >
-                <rect
-                  :x="mapViewBox.ox + n.x * MAP_NODE_W + 3"
-                  :y="mapViewBox.oy + n.y * MAP_NODE_H + 3"
-                  :width="MAP_NODE_W - 6"
-                  :height="MAP_NODE_H - 6"
-                  rx="5"
-                  fill="#171717"
-                  stroke="#3f3f46"
-                  stroke-width="1"
-                />
-                <text
-                  :x="mapViewBox.ox + n.x * MAP_NODE_W + MAP_NODE_W / 2"
-                  :y="mapViewBox.oy + n.y * MAP_NODE_H + 16"
-                  text-anchor="middle"
-                  fill="#d4d4d8"
-                  font-family="ui-monospace, monospace"
-                  font-size="11"
-                >
-                  #{{ n.room.room_id }} {{ n.room.name.length > 12 ? n.room.name.slice(0, 11) + '…' : n.room.name }}
-                </text>
-                <text
-                  :x="mapViewBox.ox + n.x * MAP_NODE_W + MAP_NODE_W / 2"
-                  :y="mapViewBox.oy + n.y * MAP_NODE_H + 30"
-                  text-anchor="middle"
-                  fill="#71717a"
-                  font-family="ui-monospace, monospace"
-                  font-size="9"
-                >
-                  {{ n.room.width }}×{{ n.room.height }}
-                </text>
-              </NuxtLink>
-            </template>
-            <g v-if="currentLayoutNode">
-              <rect
-                :x="mapViewBox.ox + currentLayoutNode.x * MAP_NODE_W + 3"
-                :y="mapViewBox.oy + currentLayoutNode.y * MAP_NODE_H + 3"
-                :width="MAP_NODE_W - 6"
-                :height="MAP_NODE_H - 6"
-                rx="5"
-                fill="#064e3b"
-                stroke="#10b981"
-                stroke-width="2"
-              />
-              <text
-                :x="mapViewBox.ox + currentLayoutNode.x * MAP_NODE_W + MAP_NODE_W / 2"
-                :y="mapViewBox.oy + currentLayoutNode.y * MAP_NODE_H + 16"
-                text-anchor="middle"
-                fill="#ecfdf5"
-                font-family="ui-monospace, monospace"
-                font-size="11"
-                font-weight="600"
-              >
-                #{{ currentLayoutNode.room.room_id }} {{ currentLayoutNode.room.name.length > 12 ? currentLayoutNode.room.name.slice(0, 11) + '…' : currentLayoutNode.room.name }}
-              </text>
-              <text
-                :x="mapViewBox.ox + currentLayoutNode.x * MAP_NODE_W + MAP_NODE_W / 2"
-                :y="mapViewBox.oy + currentLayoutNode.y * MAP_NODE_H + 30"
-                text-anchor="middle"
-                fill="#a7f3d0"
-                font-family="ui-monospace, monospace"
-                font-size="9"
-              >
-                ← you are here
-              </text>
-              <title>{{ spawns.filter((s) => !s._deleted).length }} spawns · {{ currentLayoutNode.room.width }}×{{ currentLayoutNode.room.height }} cells</title>
-              <g v-for="s in currentSpawns" :key="`sp-${s.id ?? Math.random()}`">
-                <circle
-                  :cx="mapViewBox.ox + currentLayoutNode.x * MAP_NODE_W + 10 + (s.x / Math.max(currentLayoutNode.room.width ?? 1, 1)) * (MAP_NODE_W - 20)"
-                  :cy="mapViewBox.oy + currentLayoutNode.y * MAP_NODE_H + 10 + (s.y / Math.max(currentLayoutNode.room.height ?? 1, 1)) * (MAP_NODE_H - 20)"
-                  :r="4"
-                  :fill="spawnColor(s.type)"
-                  stroke="#0a0a0a"
-                  stroke-width="1"
-                >
-                  <title>{{ s.type }} · {{ s.template_id }} · ({{ s.x }},{{ s.y }}) · respawn {{ s.respawn_time }}s</title>
-                </circle>
-                <text
-                  :x="mapViewBox.ox + currentLayoutNode.x * MAP_NODE_W + 10 + (s.x / Math.max(currentLayoutNode.room.width ?? 1, 1)) * (MAP_NODE_W - 20)"
-                  :y="mapViewBox.oy + currentLayoutNode.y * MAP_NODE_H + 10 + (s.y / Math.max(currentLayoutNode.room.height ?? 1, 1)) * (MAP_NODE_H - 20) + 3"
-                  text-anchor="middle"
-                  fill="#fff"
-                  font-family="ui-monospace, monospace"
-                  font-size="8"
-                  font-weight="700"
-                  style="pointer-events:none"
-                >{{ s.type[0]?.toUpperCase() }}</text>
-              </g>
-            </g>
-          </g>
-        </svg>
-      </div>
+      <AdminRoomGridMap
+        v-else
+        :region-id="regionId"
+        :rooms="gridRooms"
+        :exits="graphData?.exits ?? []"
+        :zones="zonesInRegion"
+        :terrain="terrainsInWorld"
+        :current-room-id="roomId"
+        @create-room="createRoomFrom"
+      />
 
       <div class="grid grid-cols-2 gap-3">
         <div class="bg-neutral-900 border border-neutral-800 rounded p-3">

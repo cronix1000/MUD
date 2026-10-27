@@ -1,6 +1,6 @@
+import { getEntity } from '../../../utils/entities'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve as resolvePath, join } from 'node:path'
-import { getPool } from '../../../utils/db'
 
 function scriptsRoot(): string {
   const envRoot = process.env.MUD_SCRIPTS_PATH
@@ -20,20 +20,13 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Invalid region key' })
   }
 
-  const res = await getPool().query<{
-    id: string
-    name: string
-  }>(
-    `select id, name
-       from world.world_regions
-      where id = $1`,
-    [region_id],
-  )
-  const region = res.rows[0]
+  const record = await getEntity('region', region_id)
 
-  if (!region) {
+  if (!record) {
     throw createError({ statusCode: 404, statusMessage: `Region not found: ${composite}` })
   }
+
+  const region = { id: record.entity_id, name: String(record.doc.name ?? record.entity_id) }
 
 
 

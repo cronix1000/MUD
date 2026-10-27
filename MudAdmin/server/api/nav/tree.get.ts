@@ -7,9 +7,25 @@ interface ZoneRow { region_id: string; zone_id: number; name: string }
 export default defineEventHandler(async () => {
   const pool = getPool()
   const [regionsR, roomsR, zonesR] = await Promise.all([
-    pool.query<RegionRow>(`select id, name from world.world_regions order by id asc`),
-    pool.query<RoomRow>(`select region_id, room_id, name, zone_id from world.world_rooms order by room_id asc`),
-    pool.query<ZoneRow>(`select region_id, zone_id, name from world.world_zones order by zone_id asc`),
+    pool.query<RegionRow>(
+      `select entity_id as id, doc->>'name' as name
+         from world.entities
+        where entity_type = 'region'
+        order by id asc`,
+    ),
+    pool.query<RoomRow>(
+      `select doc->>'region_id' as region_id, (doc->>'room_id')::int as room_id,
+              doc->>'name' as name, (doc->>'zone_id')::int as zone_id
+         from world.entities
+        where entity_type = 'room'
+        order by room_id asc`,
+    ),
+    pool.query<ZoneRow>(
+      `select doc->>'region_id' as region_id, (doc->>'zone_id')::int as zone_id, doc->>'name' as name
+         from world.entities
+        where entity_type = 'zone'
+        order by zone_id asc`,
+    ),
   ])
   const regions = regionsR.rows
   const rooms = roomsR.rows

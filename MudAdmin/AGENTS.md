@@ -48,6 +48,18 @@ After running migrations at `/admin/_migrate`, the following world-building page
 - **Scripts** (`/admin/scripts`) — browse Lua files in `ModularMudServer/scripts/`, preview contents, and deep-link to VSCode via `vscode://file/...`. Validate syntax with `luac -p` if available.
 - **Generic table** (`/admin/[table]`) — card view with `InspectDrawer`, filters, search. Backed by `server/api/tables/[table]/...`.
 
+## World documents (`world.entities`)
+
+Static world content is migrating to a single document table: `world.entities (entity_type, entity_id, doc JSONB, parent_id, mod_origin)`. One row per entity; one `PUT` per save.
+
+- **Pages** — `/entities/{type}` (list + create + delete) and `/entities/{type}/{id}` (doc editor: typed fields for registered keys, Raw JSON for everything else, `parent_id` for prototype inheritance). Sidebar group "Documents".
+- **API** — `server/api/entities/[type]/...` (`GET` list with `q` search, `POST` create, `[id] GET/PUT/DELETE`). `PUT` replaces the whole doc in one transactional call — there is no N+1 child-table dance.
+- **Field registry** — `app/utils/entitySchemas.ts` is the single source of truth for per-type fields and widget types (`text | textarea | number | bool | json | script`). Adding a field to the admin UI = adding an entry; unknown doc keys still round-trip via Raw JSON.
+- **Server helpers** — `server/utils/entities.ts` (`listEntities`, `getEntity`, `upsertEntity`, `deleteEntity`). Do not write SQL against `world.entities` from pages; go through these or the API.
+- **Backfill** — `scripts/entities-backfill.mjs` at the repo root (dry-run by default; `--apply` writes; idempotent; preserves `parent_id` on conflict).
+- **Migration 30** drops empty legacy `world_*` tables (conditional: non-empty tables survive, so it is safe on prod). In beta this removed quests/dialogues/loot/skills/recipes/factions/races/shops/board/zones/field_definitions. The old specialized pages `/world/quests`, `/recipes`, `/loot`, `/world_zones/[id]` redirect to their `/entities/*` counterparts; overview stats, nav-tree zones, and `/api/search/entities` read `world.entities` for those types (with legacy fallback for prod).
+- **Legacy tables** — the remaining old `world_*` row tables (regions, rooms, exits, spawns, terrains, items, mobs, interactables) and their specialized editors keep working until those editors migrate; then a later migration drops them.
+
 ## Wiki links (`[[type:id]]`)
 
 Symbolic cross-entity references in `description`, `loot_drop`, `template_id`, `target_room`, etc. Implementation in `app/utils/wikiParser.ts` + `app/utils/wikiId.ts` + `app/components/admin/{WikiIdInput,WikiText}.vue`.

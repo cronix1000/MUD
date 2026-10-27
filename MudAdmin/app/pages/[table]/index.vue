@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { encodeCompositeKey, isCompositeKey } from '~/utils/composite-key'
+import { getLogicalRef, isAutoManagedColumn } from '~/utils/column-refs'
+import type { ColumnInfo } from '~/utils/column-info'
 import InspectDrawer from '~/components/admin/InspectDrawer.vue'
-
-interface ColumnInfo { cid: number; name: string; type: string; notnull: 0 | 1; dflt_value: unknown; pk: 0 | 1 }
 
 definePageMeta({ layout: 'admin' })
 
@@ -77,18 +77,93 @@ const hasPrev = computed(() => offset.value > 0)
 
 const showCreate = ref(false)
 const createBody = ref<Record<string, string>>({})
+const createRefs = ref<Record<string, Record<string, unknown>[]>>({})
 
 function openCreate() {
+  if (table.value === 'world_interactables') {
+    navigateTo('/world_interactables/new')
+    return
+  }
   createBody.value = {}
+  createRefs.value = {}
   showCreate.value = true
+  void loadCreateRefs()
 }
 
-async function createRow() {
-  await $fetch(`/api/tables/${table.value}`, { method: 'POST', body: createBody.value })
-  showCreate.value = false
-  offset.value = 0
-  await refresh()
+async function loadCreateRefs() {
+  const cols = data.value?.columns ?? []
+  const next: Record<string, Record<string, unknown>[]> = { ...createRefs.value }
+  for (const c of cols) {
+    if (isAutoManagedColumn(c)) continue
+    let parentTable: string | null = null
+    const ref = getLogicalRef(table.value, c.name)
+    if (ref) {
+      parentTable = ref.parentTable
+      if (ref.dependsOn && ref.dependsOnParent) {
+        const parentVal = createBody.value[ref.dependsOn]
+        if (!parentVal) {
+          next[c.name] = []
+          continue
+        }
+      }
+    } else if (c.fk) {
+      parentTable = c.fk.table
+    } else {
+      continue
+    }
+    try {
+      const params = new URLSearchParams()
+      if (ref?.dependsOn && ref.dependsOnParent) {
+        params.set('q', String(createBody.value[ref.dependsOn] ?? ''))
+      }
+      params.set('limit', '200')
+      const res = await $fetch<{ rows: Record<string, unknown>[] }>(`/api/tables/${parentTable}?${params.toString()}`)
+      next[c.name] = res.rows ?? []
+    } catch {
+      next[c.name] = []
+    }
+  }
+  createRefs.value = next
 }
+
+const createMissing = computed<ColumnInfo[]>(() => {
+  const cols = data.value?.columns ?? []
+  return cols.filter((c) => {
+    if (isAutoManagedColumn(c)) return false
+    const v = createBody.value[c.name]
+    if (v !== undefined && v !== null && String(v).length > 0) return false
+    if (c.notnull === 0) return false
+    if (c.dflt_value !== null) return false
+    return true
+  })
+})
+
+const createBlocked = computed(() => createMissing.value.length > 0)
+
+watch(createBody, () => {
+  const cols = data.value?.columns ?? []
+  for (const c of cols) {
+    const ref = getLogicalRef(table.value, c.name)
+    if (ref?.dependsOn && createBody.value[ref.dependsOn] !== undefined) {
+      void loadCreateRefs()
+      return
+    }
+  }
+}, { deep: true })
+
+async function createRow() {
+  try {
+    await $fetch(`/api/tables/${table.value}`, { method: 'POST', body: createBody.value })
+    showCreate.value = false
+    offset.value = 0
+    await refresh()
+  } catch (e: unknown) {
+    const err = e as { data?: { statusMessage?: string } }
+    errorMessage.value = err.data?.statusMessage ?? 'Create failed'
+  }
+}
+
+const errorMessage = ref<string | null>(null)
 
 async function deleteRow(row: Record<string, unknown>) {
   if (!confirm('Delete this row?')) return
@@ -275,13 +350,53 @@ function tryParse(v: string): unknown {
     <div v-if="showCreate" class="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50" @click.self="showCreate = false">
       <div class="bg-neutral-900 border border-neutral-700 rounded p-6 w-full max-w-2xl max-h-[80vh] overflow-auto">
         <h3 class="text-lg font-semibold mb-3">New row in {{ table }}</h3>
+        <div v-if="errorMessage" class="bg-red-900/40 border border-red-700 rounded px-3 py-2 text-sm text-red-200 mb-3">{{ errorMessage }}</div>
+        <div v-if="createMissing.length" class="bg-amber-900/30 border border-amber-700 rounded px-3 py-2 text-sm text-amber-200 mb-3">
+          Missing required fields: {{ createMissing.map((c) => c.name).join(', ') }}
+        </div>
         <div class="space-y-3">
           <div v-for="c in data?.columns" :key="c.name" class="grid grid-cols-3 gap-2 items-start">
             <label class="text-sm font-mono pt-2">
               {{ c.name }}
               <span class="text-neutral-500">({{ c.type }})</span>
+              <span v-if="isAutoManagedColumn(c)" class="text-emerald-500 ml-1">[auto]</span>
             </label>
+            <div v-if="isAutoManagedColumn(c)" class="col-span-2 px-2 py-1 text-sm text-neutral-500 italic">
+              assigned automatically
+            </div>
+            <select
+              v-else-if="getLogicalRef(table, c.name)"
+              v-model="createBody[c.name]"
+              class="col-span-2 bg-neutral-950 border border-neutral-700 rounded px-2 py-1 text-sm"
+            >
+              <option value="">— pick —</option>
+              <option
+                v-for="r in (createRefs[c.name] ?? [])"
+                :key="String(r[getLogicalRef(table, c.name)!.valueKey])"
+                :value="String(r[getLogicalRef(table, c.name)!.valueKey])"
+              >{{ getLogicalRef(table, c.name)!.parentLabel(r) }}</option>
+            </select>
+            <select
+              v-else-if="c.fk"
+              v-model="createBody[c.name]"
+              class="col-span-2 bg-neutral-950 border border-neutral-700 rounded px-2 py-1 text-sm"
+            >
+              <option value="">— pick —</option>
+              <option
+                v-for="r in (createRefs[c.name] ?? [])"
+                :key="String(r[c.fk.column])"
+                :value="String(r[c.fk.column])"
+              >{{ String(r[c.fk.column]) }}</option>
+            </select>
+            <input
+              v-else-if="['integer', 'bigint', 'smallint', 'numeric', 'real', 'double precision'].includes((c.type || '').toLowerCase())"
+              v-model.number="createBody[c.name]"
+              type="number"
+              class="col-span-2 bg-neutral-950 border border-neutral-700 rounded px-2 py-1 font-mono text-sm"
+              :placeholder="c.dflt_value !== null ? String(c.dflt_value) : ''"
+            />
             <textarea
+              v-else
               v-model="createBody[c.name]"
               :rows="c.name.endsWith('_json') ? 4 : 1"
               class="col-span-2 bg-neutral-950 border border-neutral-700 rounded px-2 py-1 font-mono text-sm"
@@ -291,7 +406,11 @@ function tryParse(v: string): unknown {
         </div>
         <div class="flex justify-end gap-2 mt-4">
           <button class="px-3 py-1.5 rounded hover:bg-neutral-800 text-sm" @click="showCreate = false">Cancel</button>
-          <button class="px-3 py-1.5 rounded bg-emerald-700 hover:bg-emerald-600 text-sm" @click="createRow">Create</button>
+          <button
+            class="px-3 py-1.5 rounded bg-emerald-700 hover:bg-emerald-600 text-sm disabled:opacity-50"
+            :disabled="createBlocked"
+            @click="createRow"
+          >Create</button>
         </div>
       </div>
     </div>

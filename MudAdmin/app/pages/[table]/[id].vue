@@ -24,9 +24,6 @@ const composite = computed(() => isCompositeKey(table.value))
 function compositeFields(t: string): string[] {
   const map: Record<string, string[]> = {
     world_rooms: ['region_id', 'room_id'],
-    world_mobs: ['template_id'],
-    world_items: ['template_id'],
-    world_interactables: ['template_id'],
     world_terrains: ['symbol'],
     world_loot_tables: ['table_id'],
     world_dialogues: ['node_id'],
@@ -89,7 +86,6 @@ async function save() {
 <template>
   <div>
     <AdminRoomEditor v-if="composite && table === 'world_rooms'" :composite-key="idRaw" @close="navigateTo(`/${table}`)" />
-    <AdminMobEditor v-else-if="composite && table === 'world_mobs'" :composite-key="idRaw" @close="navigateTo(`/${table}`)" />
     <div v-else>
       <div class="flex items-center gap-3 mb-4">
         <NuxtLink :to="`/${table}`" class="text-sky-400 hover:underline text-sm">← back</NuxtLink>

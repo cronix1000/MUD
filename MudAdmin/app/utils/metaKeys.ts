@@ -11,15 +11,16 @@
 // per entity type so a key like mob.respawn_seconds doesn't collide with
 // item.respawn_seconds.
 
-export type MetaKeyType = 'int' | 'float' | 'bool' | 'string' | 'enum'
+export type MetaKeyType = 'int' | 'float' | 'bool' | 'string' | 'enum' | 'array'
 
 export interface MetaKeySpec {
   type: MetaKeyType
-  default: number | boolean | string
+  default: number | boolean | string | string[]
   min?: number
   max?: number
   maxLen?: number
   values?: string[]
+  itemMaxLen?: number
   label?: string
   help?: string
 }
@@ -61,6 +62,7 @@ export const META_KEYS: Record<'mob' | 'room' | 'item' | 'interactable', MetaKey
   interactable: {
     cooldown_seconds:  { type: 'int',    default: 0, min: 0, max: 86400,         label: 'Cooldown (seconds)' },
     max_uses_per_player: { type: 'int',  default: -1, min: -1, max: 1000,        label: 'Max uses (-1 = unlimited)' },
+    alchemy_circle_id: { type: 'string', default: '',  maxLen: 200, label: 'Alchemy circle (symbol)', help: 'The drawn symbol pattern that identifies this circle. Consumed by the C++ alchemy decoder to resolve heat, mana, element, and other qualities at runtime. Use the magic circle maker to author. Examples: @, @@c, &r@&rco.' },
   },
 }
 
@@ -76,6 +78,27 @@ export function getDefaults(entityType: MetaEntityType): Record<string, unknown>
     out[key] = spec.default
   }
   return out
+}
+
+export function coerceMetaValue(spec: MetaKeySpec, raw: unknown): unknown {
+  switch (spec.type) {
+    case 'int':
+      return Math.trunc(Number(raw) || 0)
+    case 'float':
+      return Number(raw) || 0
+    case 'bool':
+      return raw === true || raw === 'true' || raw === 1 || raw === '1'
+    case 'string':
+      return raw === null || raw === undefined ? '' : String(raw)
+    case 'enum':
+      return raw === null || raw === undefined ? '' : String(raw)
+    case 'array':
+      if (Array.isArray(raw)) return raw.map((v) => v === null || v === undefined ? '' : String(v))
+      if (raw === null || raw === undefined || raw === '') return [] as string[]
+      return [String(raw)]
+    default:
+      return raw
+  }
 }
 
 // Merge saved meta with registry defaults. Saved values win when valid;

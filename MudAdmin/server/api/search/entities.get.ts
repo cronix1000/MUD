@@ -7,29 +7,31 @@ interface SearchResult {
   href: string
 }
 
-const VALID_TYPES = new Set(['mob', 'npc', 'item', 'quest', 'region', 'skill', 'recipe', 'room', 'interactable', 'zone'])
+const VALID_TYPES = new Set(['mob', 'npc', 'item', 'quest', 'region', 'skill', 'recipe', 'room', 'interactable', 'zone', 'loot_table'])
 
 function buildHref(type: string, id: string): string {
   switch (type) {
     case 'room':
-      return `/admin/world_rooms/${encodeURIComponent(id)}`
+      return `/world_rooms/${encodeURIComponent(id)}`
     case 'region':
-      return `/admin/world/regions/${encodeURIComponent(id)}`
+      return `/world/regions/${encodeURIComponent(id)}`
     case 'mob':
     case 'npc':
-      return `/admin/world_mobs/${encodeURIComponent(id)}`
+      return `/entities/mob/${encodeURIComponent(id)}`
     case 'item':
-      return `/admin/world_items/${encodeURIComponent(id)}`
+      return `/entities/item/${encodeURIComponent(id)}`
     case 'quest':
-      return `/admin/world/quests/${encodeURIComponent(id)}`
+      return `/entities/quest/${encodeURIComponent(id)}`
     case 'skill':
-      return `/admin/world_skills/${encodeURIComponent(id)}`
+      return `/entities/skill/${encodeURIComponent(id)}`
     case 'recipe':
-      return `/admin/recipes/${encodeURIComponent(id)}`
+      return `/entities/recipe/${encodeURIComponent(id)}`
     case 'interactable':
-      return `/admin/world_interactables/${encodeURIComponent(id)}`
+      return `/entities/interactable/${encodeURIComponent(id)}`
     case 'zone':
-      return `/admin/world_zones/${encodeURIComponent(id)}`
+      return `/entities/zone/${encodeURIComponent(id)}`
+    case 'loot_table':
+      return `/entities/loot_table/${encodeURIComponent(id)}`
     default:
       return '#'
   }
@@ -67,64 +69,86 @@ async function runQuery(args: QueryArgs): Promise<SearchResult[]> {
   const allRows = async <T extends Record<string, unknown>>(sql: string, params: unknown[]) =>
     (await pool.query<T>(sql, params)).rows
 
+  // Legacy-table query with a world.entities fallback for deployments where
+  // the empty legacy table has been dropped (migration 30).
+  const allRowsOr = async <T extends Record<string, unknown>>(
+    sql: string,
+    entityType: string,
+    project: (e: { entity_id: string; doc: Record<string, unknown> }) => T,
+  ): Promise<T[]> => {
+    try {
+      return (await pool.query<T>(sql, [])).rows
+    } catch (e) {
+      if ((e as { code?: string }).code !== '42P01') throw e
+      const r = await pool.query<{ entity_id: string; doc: Record<string, unknown> }>(
+        `select entity_id, doc from world.entities where entity_type = $1`,
+        [entityType],
+      )
+      return r.rows.map(project)
+    }
+  }
+
   if (type === 'mob' || !type) {
-    const rows = await allRows<{ template_id: string; name: string }>(
-      `select template_id, name from world.world_mobs`,
+    const r = await pool.query<{ entity_id: string; name: string }>(
+      `select entity_id, doc->>'name' as name from world.entities where entity_type = 'mob'`,
       [],
     )
-    add(rows, 'mob', (r) => ({ id: r.template_id, name: `${r.template_id} — ${r.name}` }))
+    add(r.rows, 'mob', (x) => ({ id: x.entity_id, name: `${x.entity_id} — ${x.name ?? ''}` }))
     if (type === 'mob') return results.slice(0, limit)
   }
 
   if (type === 'npc') {
-    const rows = await allRows<{ template_id: string; name: string }>(
-      `select template_id, name from world.world_mobs where ai = 'passive'`,
+    const r = await pool.query<{ entity_id: string; name: string }>(
+      `select entity_id, doc->>'name' as name from world.entities where entity_type = 'mob' and doc->>'ai' = 'passive'`,
       [],
     )
-    add(rows, 'npc', (r) => ({ id: r.template_id, name: `${r.template_id} — ${r.name}` }))
+    add(r.rows, 'npc', (x) => ({ id: x.entity_id, name: `${x.entity_id} — ${x.name ?? ''}` }))
     return results.slice(0, limit)
   }
 
   if (type === 'item' || !type) {
-    const rows = await allRows<{ template_id: string; name: string }>(
-      `select template_id, name from world.world_items`,
+    const r = await pool.query<{ entity_id: string; name: string }>(
+      `select entity_id, doc->>'name' as name from world.entities where entity_type = 'item'`,
       [],
     )
-    add(rows, 'item', (r) => ({ id: r.template_id, name: `${r.template_id} — ${r.name}` }))
+    add(r.rows, 'item', (x) => ({ id: x.entity_id, name: `${x.entity_id} — ${x.name ?? ''}` }))
     if (type === 'item') return results.slice(0, limit)
   }
 
   if (type === 'quest' || !type) {
-    const rows = await allRows<{ quest_id: string; name: string }>(
+    const rows = await allRowsOr<{ quest_id: string; name: string }>(
       `select quest_id, name from world.world_quests`,
-      [],
+      'quest',
+      (e) => ({ quest_id: e.entity_id, name: String(e.doc.name ?? '') }),
     )
     add(rows, 'quest', (r) => ({ id: r.quest_id, name: `${r.quest_id} — ${r.name}` }))
     if (type === 'quest') return results.slice(0, limit)
   }
 
   if (type === 'region') {
-    const rows = await allRows<{ id: string; name: string }>(
-      `select id, name from world.world_regions`,
+    const r = await pool.query<{ entity_id: string; name: string }>(
+      `select entity_id, doc->>'name' as name from world.entities where entity_type = 'region'`,
       [],
     )
-    add(rows, 'region', (r) => ({ id: r.id, name: `${r.id} (${r.name})` }))
+    add(r.rows, 'region', (x) => ({ id: x.entity_id, name: `${x.entity_id} (${x.name ?? ''})` }))
     return results.slice(0, limit)
   }
 
   if (type === 'skill') {
-    const rows = await allRows<{ skill_id: string; name: string }>(
+    const rows = await allRowsOr<{ skill_id: string; name: string }>(
       `select skill_id, name from world.world_skills`,
-      [],
+      'skill',
+      (e) => ({ skill_id: e.entity_id, name: String(e.doc.name ?? '') }),
     )
     add(rows, 'skill', (r) => ({ id: r.skill_id, name: `${r.skill_id} — ${r.name}` }))
     return results.slice(0, limit)
   }
 
   if (type === 'recipe') {
-    const rows = await allRows<{ recipe_id: string; name: string }>(
+    const rows = await allRowsOr<{ recipe_id: string; name: string }>(
       `select recipe_id, name from world.world_recipes`,
-      [],
+      'recipe',
+      (e) => ({ recipe_id: e.entity_id, name: String(e.doc.name ?? '') }),
     )
     add(rows, 'recipe', (r) => ({ id: r.recipe_id, name: `${r.recipe_id} — ${r.name}` }))
     return results.slice(0, limit)
@@ -143,18 +167,23 @@ async function runQuery(args: QueryArgs): Promise<SearchResult[]> {
   }
 
   if (type === 'interactable') {
-    const rows = await allRows<{ template_id: string; name: string }>(
-      `select template_id, name from world.world_interactables`,
+    const r = await pool.query<{ entity_id: string; name: string }>(
+      `select entity_id, doc->>'name' as name from world.entities where entity_type = 'interactable'`,
       [],
     )
-    add(rows, 'interactable', (r) => ({ id: r.template_id, name: `${r.template_id} — ${r.name}` }))
+    add(r.rows, 'interactable', (x) => ({ id: x.entity_id, name: `${x.entity_id} — ${x.name ?? ''}` }))
     return results.slice(0, limit)
   }
 
   if (type === 'zone') {
-    const rows = await allRows<{ region_id: string; zone_id: number; name: string }>(
+    const rows = await allRowsOr<{ region_id: string; zone_id: number; name: string }>(
       `select region_id, zone_id, name from world.world_zones`,
-      [],
+      'zone',
+      (e) => ({
+        region_id: String(e.doc.region_id ?? ''),
+        zone_id: Number(e.doc.zone_id ?? 0),
+        name: String(e.doc.name ?? ''),
+      }),
     )
     add(rows, 'zone', (r) => ({
       id: `${r.region_id}::${r.zone_id}`,
@@ -163,15 +192,30 @@ async function runQuery(args: QueryArgs): Promise<SearchResult[]> {
     return results.slice(0, limit)
   }
 
+  if (type === 'loot_table') {
+    const r = await pool.query<{ entity_id: string; name: string }>(
+      `select entity_id, doc->>'name' as name from world.entities where entity_type = 'loot_table'`,
+      [],
+    )
+    add(r.rows, 'loot_table', (x) => ({ id: x.entity_id, name: `${x.entity_id} — ${x.name ?? ''}` }))
+    return results.slice(0, limit)
+  }
+
   if (!type) {
     const regions = await allRows<{ id: string; name: string }>(
       `select id, name from world.world_regions`, [])
     add(regions, 'region', (x) => ({ id: x.id, name: `${x.id} (${x.name})` }))
-    const skills = await allRows<{ skill_id: string; name: string }>(
-      `select skill_id, name from world.world_skills`, [])
+    const skills = await allRowsOr<{ skill_id: string; name: string }>(
+      `select skill_id, name from world.world_skills`,
+      'skill',
+      (e) => ({ skill_id: e.entity_id, name: String(e.doc.name ?? '') }),
+    )
     add(skills, 'skill', (x) => ({ id: x.skill_id, name: `${x.skill_id} — ${x.name}` }))
-    const recipes = await allRows<{ recipe_id: string; name: string }>(
-      `select recipe_id, name from world.world_recipes`, [])
+    const recipes = await allRowsOr<{ recipe_id: string; name: string }>(
+      `select recipe_id, name from world.world_recipes`,
+      'recipe',
+      (e) => ({ recipe_id: e.entity_id, name: String(e.doc.name ?? '') }),
+    )
     add(recipes, 'recipe', (x) => ({ id: x.recipe_id, name: `${x.recipe_id} — ${x.name}` }))
   }
 

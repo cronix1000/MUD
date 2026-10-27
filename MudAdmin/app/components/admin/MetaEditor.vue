@@ -63,6 +63,12 @@ function asString(v: unknown): string {
   return v === null || v === undefined ? '' : String(v)
 }
 
+function asArray(v: unknown): unknown[] {
+  if (Array.isArray(v)) return v.slice()
+  if (v === null || v === undefined || v === '') return []
+  return [v]
+}
+
 function coerceForSave(key: string): unknown {
   const spec = specs.value[key]
   const raw = state[key]
@@ -78,6 +84,8 @@ function coerceForSave(key: string): unknown {
       return asString(raw)
     case 'enum':
       return asString(raw)
+    case 'array':
+      return asArray(raw).map((x) => x === null || x === undefined ? '' : String(x))
     default:
       return raw
   }
@@ -86,6 +94,24 @@ function coerceForSave(key: string): unknown {
 function setField(key: string, value: unknown) {
   state[key] = value
   emitChange()
+}
+
+function addArrayItem(key: string) {
+  const cur = asArray(state[key])
+  cur.push('')
+  setField(key, cur)
+}
+
+function removeArrayItem(key: string, idx: number) {
+  const cur = asArray(state[key])
+  cur.splice(idx, 1)
+  setField(key, cur)
+}
+
+function setArrayItem(key: string, idx: number, value: string) {
+  const cur = asArray(state[key])
+  cur[idx] = value
+  setField(key, cur)
 }
 </script>
 
@@ -134,6 +160,32 @@ function setField(key: string, value: unknown) {
         class="border rounded px-2 py-1 text-sm"
         @input="(e) => setField(key, (e.target as HTMLInputElement).value)"
       >
+
+      <div v-else-if="spec.type === 'array'" class="space-y-1">
+        <div
+          v-for="(_, idx) in asArray(state[key])"
+          :key="`${key}-${idx}`"
+          class="flex items-center gap-1"
+        >
+          <input
+            type="text"
+            :value="String(asArray(state[key])[idx] ?? '')"
+            :maxlength="spec.itemMaxLen"
+            class="border rounded px-2 py-1 text-sm flex-1"
+            @input="(e) => setArrayItem(key, idx, (e.target as HTMLInputElement).value)"
+          >
+          <button
+            type="button"
+            class="px-2 py-1 text-xs text-red-600 hover:text-red-800"
+            @click="removeArrayItem(key, idx)"
+          >×</button>
+        </div>
+        <button
+          type="button"
+          class="px-2 py-1 text-xs border rounded hover:bg-gray-100"
+          @click="addArrayItem(key)"
+        >+ add element</button>
+      </div>
 
       <p v-if="spec.help" class="text-xs text-gray-500">{{ spec.help }}</p>
     </div>

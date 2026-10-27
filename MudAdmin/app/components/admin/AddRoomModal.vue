@@ -1,8 +1,6 @@
 <script setup lang="ts">
-import { encodeCompositeKey } from '~/utils/composite-key'
-
 const props = defineProps<{
-  regionId: string
+  regionId?: string
   regionName?: string
 }>()
 
@@ -11,7 +9,45 @@ const emit = defineEmits<{
   (e: 'close'): void
 }>()
 
+interface RegionRow {
+  id: string
+  name: string | null
+}
+
 const open = ref(true)
+
+const regionsData = ref<RegionRow[]>([])
+const regionsLoaded = ref(false)
+
+const selectedRegionId = ref<string>(props.regionId ?? '')
+
+watch(
+  () => props.regionId,
+  (val) => {
+    if (val) selectedRegionId.value = val
+  },
+)
+
+onMounted(async () => {
+  try {
+    const res = await $fetch<{ rows: Array<{ entity_id: string; doc: { name?: string } }> }>('/api/entities/region', { query: { limit: 500 } })
+    regionsData.value = (res.rows ?? []).map((r) => ({ id: r.entity_id, name: String(r.doc.name ?? '') }))
+  } catch {
+    regionsData.value = []
+  } finally {
+    regionsLoaded.value = true
+    if (!selectedRegionId.value && regionsData.value.length) {
+      selectedRegionId.value = regionsData.value[0]!.id
+    }
+  }
+})
+
+const selectedRegionName = computed<string | null>(() => {
+  const r = regionsData.value.find((x) => x.id === selectedRegionId.value)
+  return r?.name ?? null
+})
+
+const showDropdown = computed(() => !props.regionId)
 
 const name = ref('')
 const description = ref('')
@@ -23,8 +59,8 @@ const creating = ref(false)
 const error = ref<string | null>(null)
 const assignedRoomId = ref<number | null>(null)
 const assignedRoomKey = computed(() =>
-  assignedRoomId.value !== null
-    ? encodeURIComponent(encodeCompositeKey('world_rooms', { region_id: props.regionId, room_id: assignedRoomId.value }))
+  assignedRoomId.value !== null && selectedRegionId.value
+    ? encodeURIComponent(`${selectedRegionId.value}::${assignedRoomId.value}`)
     : null,
 )
 
@@ -34,48 +70,61 @@ function close() {
 }
 
 async function submit() {
+  if (!selectedRegionId.value) {
+    error.value = 'Pick a region first.'
+    return
+  }
   if (!name.value.trim()) {
     error.value = 'Name is required'
     return
   }
   try {
-    JSON.parse(layoutJson.value)
-  } catch {
-    error.value = 'layout_json is not valid JSON'
-    return
-  }
-  creating.value = true
-  error.value = null
-  assignedRoomId.value = null
-  try {
-    const res = await $fetch<{ id: number | null }>('/api/tables/world_rooms', {
+    creating.value = true
+    error.value = null
+    assignedRoomId.value = null
+    const suggested = await $fetch<{ suggested_room_id: number }>(
+      '/api/rooms/next-free-id',
+      { query: { region_id: selectedRegionId.value } },
+    )
+    const newId = Number(suggested.suggested_room_id)
+    if (!Number.isSafeInteger(newId) || newId <= 0) {
+      throw new Error('Could not determine the next free room id')
+    }
+    await $fetch('/api/entities/room', {
       method: 'POST',
       body: {
-        region_id: props.regionId,
-        name: name.value.trim(),
-        description: description.value || null,
-        terrain: terrain.value || null,
-        width: width.value,
-        height: height.value,
-        layout_json: layoutJson.value,
+        id: `${selectedRegionId.value}::${newId}`,
+        doc: {
+          region_id: selectedRegionId.value,
+          room_id: newId,
+          name: name.value.trim(),
+          description: description.value || '',
+          terrain: terrain.value || null,
+          width: width.value,
+          height: height.value,
+          layout: JSON.parse(layoutJson.value),
+          spawn_x: 0,
+          spawn_y: 0,
+          zone_id: 0,
+          scripts: {},
+          exits: {},
+          spawns: [],
+        },
       },
     })
-    const newId = res.id
-    if (typeof newId !== 'number') {
-      throw new Error('Server did not assign a room_id')
-    }
     assignedRoomId.value = newId
-    emit('created', { region_id: props.regionId, room_id: newId, name: name.value.trim() })
+    emit('created', { region_id: selectedRegionId.value, room_id: newId, name: name.value.trim() })
   } catch (e: unknown) {
     const err = e as {
       statusCode?: number
       statusMessage?: string
+      message?: string
       data?: { statusMessage?: string; data?: { hint?: string } }
     }
     if (err?.statusCode === 409) {
       error.value = err.data?.data?.hint ?? 'That room already exists.'
     } else {
-      error.value = err.data?.statusMessage ?? err.statusMessage ?? 'Create failed'
+      error.value = err.data?.statusMessage ?? err.statusMessage ?? err.message ?? 'Create failed'
     }
   } finally {
     creating.value = false
@@ -106,8 +155,12 @@ function createAnother() {
     <div class="bg-neutral-900 border border-neutral-700 rounded-lg w-full max-w-2xl shadow-xl">
       <div class="flex items-center justify-between px-4 py-3 border-b border-neutral-800">
         <h3 class="text-base font-semibold">
-          Add room to <span class="font-mono text-sky-300">{{ regionId }}</span>
-          <span v-if="regionName" class="text-neutral-400 font-normal">— {{ regionName }}</span>
+          <template v-if="!showDropdown">
+            Add room to
+            <span class="font-mono text-sky-300">{{ props.regionId }}</span>
+            <span v-if="props.regionName" class="text-neutral-400 font-normal">— {{ props.regionName }}</span>
+          </template>
+          <template v-else>Add room</template>
         </h3>
         <button class="text-neutral-400 hover:text-white" aria-label="Close" @click="close">×</button>
       </div>
@@ -120,6 +173,7 @@ function createAnother() {
             Created room
             <span class="font-mono text-emerald-300">#{{ assignedRoomId }}</span>
             <span v-if="name" class="text-emerald-400">— {{ name }}</span>
+            <span v-if="selectedRegionName" class="text-emerald-400"> — {{ selectedRegionName }}</span>
           </div>
           <div class="flex items-center gap-3 text-xs">
             <NuxtLink
@@ -132,14 +186,25 @@ function createAnother() {
         </div>
 
         <template v-else>
+          <label v-if="showDropdown" class="block text-sm">
+            <span class="block text-neutral-400 mb-1">region</span>
+            <select v-model="selectedRegionId" class="w-full bg-neutral-950 border border-neutral-700 rounded px-2 py-1">
+              <option v-if="!regionsLoaded" value="">(loading…)</option>
+              <option v-else-if="!regionsData.length" value="">— no regions yet —</option>
+              <option v-for="r in regionsData" :key="r.id" :value="r.id">
+                {{ r.id }}{{ r.name ? ' — ' + r.name : '' }}
+              </option>
+            </select>
+          </label>
+
           <label class="block text-sm">
             <span class="block text-neutral-400 mb-1">name</span>
             <input v-model="name" class="w-full bg-neutral-950 border border-neutral-700 rounded px-2 py-1" />
           </label>
 
           <div class="bg-neutral-950 border border-neutral-800 rounded px-3 py-2 text-xs text-neutral-400">
-            room_id will be assigned automatically (next free in
-            <span class="font-mono text-neutral-300">{{ regionId }}</span>).
+            room_id will be assigned automatically (next free id for this region from
+            <span class="font-mono text-neutral-300">world.entities</span>).
           </div>
 
           <label class="block text-sm">
@@ -184,7 +249,7 @@ function createAnother() {
         <button
           v-if="assignedRoomId === null"
           class="px-3 py-1.5 rounded bg-emerald-700 hover:bg-emerald-600 text-sm disabled:opacity-50"
-          :disabled="creating || !name.trim()"
+          :disabled="creating || !name.trim() || !selectedRegionId"
           @click="submit"
         >
           {{ creating ? 'Creating…' : 'Create room' }}

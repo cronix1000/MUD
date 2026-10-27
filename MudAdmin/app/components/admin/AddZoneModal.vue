@@ -61,16 +61,19 @@ async function submit() {
   creating.value = true
   error.value = null
   try {
-    await $fetch('/api/tables/world_zones', {
+    await $fetch('/api/entities/zone', {
       method: 'POST',
       body: {
-        region_id: props.regionId,
-        zone_id: zoneIdInput.value,
-        name: name.value.trim(),
-        description: description.value || null,
-        rules_json: JSON.stringify(parsedRules),
-        zone_script_ref: zoneScriptRef.value.trim() || null,
-        is_active: true,
+        id: `${props.regionId}::${zoneIdInput.value}`,
+        doc: {
+          region_id: props.regionId,
+          zone_id: Number(zoneIdInput.value),
+          name: name.value.trim(),
+          description: description.value || '',
+          rules: parsedRules && typeof parsedRules === 'object' ? parsedRules : {},
+          zone_script_ref: zoneScriptRef.value.trim() || null,
+          is_active: true,
+        },
       },
     })
     emit('created', { region_id: props.regionId, zone_id: zoneIdInput.value, name: name.value.trim() })

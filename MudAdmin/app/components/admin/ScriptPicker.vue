@@ -63,8 +63,11 @@ async function preview(path: string) {
 }
 
 function pick(path: string) {
-  const target = props.type === 'room' ? 'on_enter' : 'script_ref'
-  update(target as keyof ScriptRef, path)
+  if (props.type === 'room') {
+    update('on_enter', 'on_enter')
+  } else {
+    update('script_ref', path)
+  }
   showBrowse.value = false
 }
 

@@ -1,4 +1,4 @@
-export type EntityType = 'room' | 'npc' | 'mob' | 'item' | 'quest' | 'region' | 'skill' | 'recipe' | 'interactable' | 'zone'
+export type EntityType = 'room' | 'npc' | 'mob' | 'item' | 'quest' | 'region' | 'skill' | 'recipe' | 'interactable' | 'zone' | 'loot_table'
 
 export interface WikiToken {
   type: 'text' | 'link'
@@ -39,24 +39,26 @@ export function parseWiki(text: string): WikiToken[] {
 export function entityHref(type: EntityType, id: string): string {
   switch (type) {
     case 'room':
-      return `/admin/world_rooms/${encodeURIComponent(id)}`
+      return `/world_rooms/${encodeURIComponent(id)}`
     case 'region':
-      return `/admin/world/regions/${encodeURIComponent(id)}`
+      return `/world/regions/${encodeURIComponent(id)}`
     case 'mob':
     case 'npc':
-      return `/admin/world_mobs/${encodeURIComponent(id)}`
+      return `/entities/mob/${encodeURIComponent(id)}`
     case 'item':
-      return `/admin/world_items/${encodeURIComponent(id)}`
+      return `/entities/item/${encodeURIComponent(id)}`
     case 'quest':
-      return `/admin/world/quests/${encodeURIComponent(id)}`
+      return `/entities/quest/${encodeURIComponent(id)}`
     case 'skill':
-      return `/admin/world_skills/${encodeURIComponent(id)}`
+      return `/entities/skill/${encodeURIComponent(id)}`
     case 'recipe':
-      return `/admin/recipes/${encodeURIComponent(id)}`
+      return `/entities/recipe/${encodeURIComponent(id)}`
     case 'interactable':
-      return `/admin/world_interactables/${encodeURIComponent(id)}`
+      return `/entities/interactable/${encodeURIComponent(id)}`
     case 'zone':
-      return `/admin/world_zones/${encodeURIComponent(id)}`
+      return `/entities/zone/${encodeURIComponent(id)}`
+    case 'loot_table':
+      return `/entities/loot_table/${encodeURIComponent(id)}`
     default:
       return '#'
   }
@@ -73,9 +75,10 @@ export const ENTITY_COLORS: Record<EntityType, string> = {
   recipe: 'bg-teal-900/40 text-teal-200 border-teal-700/50',
   interactable: 'bg-pink-900/40 text-pink-200 border-pink-700/50',
   zone: 'bg-indigo-900/40 text-indigo-200 border-indigo-700/50',
+  loot_table: 'bg-orange-900/40 text-orange-200 border-orange-700/50',
 }
 
-export const knownTypes: EntityType[] = ['room', 'npc', 'mob', 'item', 'quest', 'region', 'skill', 'recipe', 'interactable', 'zone']
+export const knownTypes: EntityType[] = ['room', 'npc', 'mob', 'item', 'quest', 'region', 'skill', 'recipe', 'interactable', 'zone', 'loot_table']
 
 export const ENTITY_ICONS: Record<EntityType, string> = {
   room: '#',
@@ -88,4 +91,5 @@ export const ENTITY_ICONS: Record<EntityType, string> = {
   recipe: '+',
   interactable: '^',
   zone: '§',
+  loot_table: '%',
 }

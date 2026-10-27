@@ -20,8 +20,21 @@
               "icon": "lucide-file",
               "title": "Master"
             }
+          },
+          {
+            "id": "d9fa02167e12a282",
+            "type": "leaf",
+            "state": {
+              "type": "release-notes",
+              "state": {
+                "currentVersion": "1.14.4"
+              },
+              "icon": "lucide-book-up",
+              "title": "Release Notes 1.14.4"
+            }
           }
-        ]
+        ],
+        "currentTab": 1
       }
     ],
     "direction": "vertical"
@@ -188,7 +201,7 @@
       "bases:Create new base": false
     }
   },
-  "active": "b187de94d2f251c5",
+  "active": "d9fa02167e12a282",
   "lastOpenFiles": [
     "Rooms.md",
     "Database.md",

@@ -1,32 +1,52 @@
 <script setup lang="ts">
-import { ANSI_COLORS, ansiToCss, ansiToForeground } from '~/utils/ansi'
+import { ANSI_COLORS, ansiToCss } from '~/utils/ansi'
 
 definePageMeta({ layout: 'admin' })
 
-interface TerrainRow {
+interface TerrainDoc {
   symbol: string
   name: string
   color: string | null
-  blocks_move: number
-  blocks_sight: number
+  blocks_move: boolean
+  blocks_sight: boolean
   move_cost: number
 }
 
-const { data: terrainsData, refresh } = await useFetch<{ rows: TerrainRow[] }>('/api/tables/world_terrains')
+interface TerrainRow extends TerrainDoc {
+  entity_id: string
+}
+
+const { data: terrainsData, refresh } = await useFetch<{ rows: Array<{ entity_id: string; doc: Record<string, unknown> }> }>(
+  '/api/entities/terrain',
+  { query: { limit: 500 } },
+)
+
+const rows = computed<TerrainRow[]>(() =>
+  (terrainsData.value?.rows ?? []).map((r) => {
+    const d = r.doc
+    return {
+      entity_id: r.entity_id,
+      symbol: String(d.symbol ?? r.entity_id),
+      name: String(d.name ?? ''),
+      color: d.color == null ? null : String(d.color),
+      blocks_move: d.blocks_move === true,
+      blocks_sight: d.blocks_sight === true,
+      move_cost: Number(d.move_cost ?? 1),
+    }
+  }),
+)
 
 const newRow = ref({
   symbol: '',
   name: '',
   color: '&y',
-  blocks_move: 0,
-  blocks_sight: 0,
+  blocks_move: false,
+  blocks_sight: false,
   move_cost: 1,
 })
 const editing = ref<Record<string, Partial<TerrainRow>>>({})
 const error = ref<string | null>(null)
 const success = ref<string | null>(null)
-
-const rows = computed(() => terrainsData.value?.rows ?? [])
 
 const usedSymbols = computed(() => new Set(rows.value.map((r) => r.symbol)))
 
@@ -40,15 +60,18 @@ async function addRow() {
     return
   }
   try {
-    await $fetch(`/api/tables/world_terrains`, {
+    await $fetch('/api/entities/terrain', {
       method: 'POST',
       body: {
-        symbol: newRow.value.symbol,
-        name: newRow.value.name,
-        color: newRow.value.color,
-        blocks_move: newRow.value.blocks_move,
-        blocks_sight: newRow.value.blocks_sight,
-        move_cost: newRow.value.move_cost,
+        id: newRow.value.symbol,
+        doc: {
+          symbol: newRow.value.symbol,
+          name: newRow.value.name,
+          color: newRow.value.color,
+          blocks_move: newRow.value.blocks_move === true,
+          blocks_sight: newRow.value.blocks_sight === true,
+          move_cost: Number(newRow.value.move_cost) || 1,
+        },
       },
     })
     success.value = `Created ${newRow.value.symbol}`
@@ -62,18 +85,20 @@ async function addRow() {
 
 async function saveRow(r: TerrainRow) {
   error.value = null
-  const key = `${encodeURIComponent(r.symbol)}`
+  const key = r.entity_id
   const patch = editing.value[key] ?? {}
+  const doc: TerrainDoc = {
+    symbol: r.symbol,
+    name: (patch.name ?? r.name) as string,
+    color: (patch.color ?? r.color) as string | null,
+    blocks_move: (patch.blocks_move ?? r.blocks_move) === true,
+    blocks_sight: (patch.blocks_sight ?? r.blocks_sight) === true,
+    move_cost: Number(patch.move_cost ?? r.move_cost) || 1,
+  }
   try {
-    await $fetch(`/api/tables/world_terrains/${key}`, {
+    await $fetch(`/api/entities/terrain/${encodeURIComponent(key)}`, {
       method: 'PUT',
-      body: {
-        name: patch.name ?? r.name,
-        color: patch.color ?? r.color,
-        blocks_move: patch.blocks_move ?? r.blocks_move,
-        blocks_sight: patch.blocks_sight ?? r.blocks_sight,
-        move_cost: patch.move_cost ?? r.move_cost,
-      },
+      body: { doc },
     })
     delete editing.value[key]
     await refresh()
@@ -85,23 +110,20 @@ async function saveRow(r: TerrainRow) {
 
 async function deleteRow(r: TerrainRow) {
   if (!confirm(`Delete tile '${r.symbol}' (${r.name})?`)) return
-  const key = `${encodeURIComponent(r.symbol)}`
-  await $fetch(`/api/tables/world_terrains/${key}`, { method: 'DELETE' })
+  await $fetch(`/api/entities/terrain/${encodeURIComponent(r.entity_id)}`, { method: 'DELETE' })
   await refresh()
 }
 
-function field<K extends keyof TerrainRow>(r: TerrainRow, key: K): Partial<TerrainRow[K]> {
-  const k = `${encodeURIComponent(r.symbol)}`
-  return editing.value[k]?.[key] ?? r[key]
+function field<K extends keyof TerrainRow>(r: TerrainRow, key: K): TerrainRow[K] {
+  return (editing.value[r.entity_id]?.[key] ?? r[key]) as TerrainRow[K]
 }
 
 function setField<K extends keyof TerrainRow>(r: TerrainRow, key: K, value: TerrainRow[K]) {
-  const k = `${encodeURIComponent(r.symbol)}`
-  editing.value[k] = { ...(editing.value[k] ?? {}), [key]: value }
+  editing.value[r.entity_id] = { ...(editing.value[r.entity_id] ?? {}), [key]: value }
 }
 
 const seeding = ref(false)
-const validationResults = ref<Array<{ room_id: number; name: string; issues: string[] }> | null>(null)
+const validationResults = ref<Array<{ region_id: string; room_id: number; name: string; issues: string[] }> | null>(null)
 
 async function seedPalette() {
   seeding.value = true
@@ -138,36 +160,35 @@ async function seedFloorsPalette() {
   }
 }
 
-const { data: roomsData } = await useFetch<{ rows: Array<{ region_id: string; room_id: number; name: string; width: number; height: number; layout_json: string | null }> }>('/api/tables/world_rooms')
+const { data: roomsData } = await useFetch<{
+  rows: Array<{ entity_id: string; doc: { region_id?: string; room_id?: number; name?: string; width?: number; height?: number; layout?: unknown } }>
+}>('/api/entities/room', { query: { limit: 500 } })
 
 function validateLayouts() {
   const palette = new Set(rows.value.map((r) => r.symbol))
   palette.add(' ')
-  const results: Array<{ room_id: number; name: string; issues: string[] }> = []
-  const rooms = roomsData.value?.rows ?? []
-  for (const r of rooms) {
+  const results: Array<{ region_id: string; room_id: number; name: string; issues: string[] }> = []
+  for (const r of roomsData.value?.rows ?? []) {
+    const region = String(r.doc.region_id ?? '')
+    const roomId = Number(r.doc.room_id ?? 0)
+    const name = String(r.doc.name ?? '')
+    const width = Number(r.doc.width ?? 0)
+    const height = Number(r.doc.height ?? 0)
     const issues: string[] = []
-    if (!r.layout_json) continue
-    let parsed: unknown = null
-    try {
-      parsed = JSON.parse(r.layout_json)
-    } catch {
-      issues.push('layout_json is not valid JSON')
-      results.push({ room_id: r.room_id, name: r.name, issues })
-      continue
-    }
+    const parsed = r.doc.layout
+    if (parsed === undefined || parsed === null) continue
     if (!Array.isArray(parsed)) {
-      issues.push('layout_json is not an array')
-      results.push({ room_id: r.room_id, name: r.name, issues })
+      issues.push('layout is not an array')
+      results.push({ region_id: region, room_id: roomId, name, issues })
       continue
     }
     const rowsArr = parsed as string[]
-    if (rowsArr.length !== r.height) {
-      issues.push(`row count ${rowsArr.length} ≠ height ${r.height}`)
+    if (rowsArr.length !== height) {
+      issues.push(`row count ${rowsArr.length} ≠ height ${height}`)
     }
     for (let i = 0; i < rowsArr.length; i++) {
-      if (rowsArr[i].length !== r.width) {
-        issues.push(`row ${i} length ${rowsArr[i].length} ≠ width ${r.width}`)
+      if (rowsArr[i].length !== width) {
+        issues.push(`row ${i} length ${rowsArr[i].length} ≠ width ${width}`)
       }
     }
     const unknown = new Set<string>()
@@ -177,7 +198,7 @@ function validateLayouts() {
       }
     }
     if (unknown.size) issues.push(`unrecognized symbols: ${[...unknown].join(' ')}`)
-    if (issues.length) results.push({ room_id: r.room_id, name: r.name, issues })
+    if (issues.length) results.push({ region_id: region, room_id: roomId, name, issues })
   }
   validationResults.value = results
 }
@@ -189,10 +210,10 @@ function validateLayouts() {
       <div>
         <h2 class="text-2xl font-semibold font-mono">Palette</h2>
         <p class="text-neutral-400 text-sm mt-1">
-          Global fallback tiles used in room layouts.
-          Each region may override these on the
+          Global fallback terrain tiles used in room layouts.
+          Each region may override these in the
           <NuxtLink to="/world/regions" class="text-sky-400 hover:underline">region editor</NuxtLink>
-          via <code>floor_palette_json</code>.
+          via <code>floor_palette</code>.
         </p>
       </div>
       <div class="flex items-center gap-2">
@@ -250,11 +271,11 @@ function validateLayouts() {
           <input v-model.number="newRow.move_cost" type="number" min="1" class="w-full bg-neutral-950 border border-neutral-700 rounded px-2 py-1" />
         </label>
         <label class="col-span-1 text-sm flex items-center gap-2 mt-5">
-          <input v-model="newRow.blocks_move" type="checkbox" :true-value="1" :false-value="0" />
+          <input v-model="newRow.blocks_move" type="checkbox" />
           <span>Blocks move</span>
         </label>
         <label class="col-span-1 text-sm flex items-center gap-2 mt-5">
-          <input v-model="newRow.blocks_sight" type="checkbox" :true-value="1" :false-value="0" />
+          <input v-model="newRow.blocks_sight" type="checkbox" />
           <span>Blocks sight</span>
         </label>
         <div class="col-span-7 flex justify-end">
@@ -278,7 +299,7 @@ function validateLayouts() {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="r in rows" :key="r.symbol" class="hover:bg-neutral-900/60">
+          <tr v-for="r in rows" :key="r.entity_id" class="hover:bg-neutral-900/60">
             <td class="px-3 py-2 border-b border-neutral-900">
               <div
                 class="w-8 h-8 inline-flex items-center justify-center font-mono text-base rounded"
@@ -315,15 +336,15 @@ function validateLayouts() {
             </td>
             <td class="px-3 py-2 border-b border-neutral-900">
               <input
-                :checked="!!(field(r,'blocks_move') as number)"
-                @change="setField(r, 'blocks_move', ($event.target as HTMLInputElement).checked ? 1 : 0)"
+                :checked="(field(r,'blocks_move') as boolean)"
+                @change="setField(r, 'blocks_move', ($event.target as HTMLInputElement).checked)"
                 type="checkbox"
               />
             </td>
             <td class="px-3 py-2 border-b border-neutral-900">
               <input
-                :checked="!!(field(r,'blocks_sight') as number)"
-                @change="setField(r, 'blocks_sight', ($event.target as HTMLInputElement).checked ? 1 : 0)"
+                :checked="(field(r,'blocks_sight') as boolean)"
+                @change="setField(r, 'blocks_sight', ($event.target as HTMLInputElement).checked)"
                 type="checkbox"
               />
             </td>
@@ -334,7 +355,7 @@ function validateLayouts() {
           </tr>
           <tr v-if="!rows.length">
             <td colspan="8" class="px-3 py-6 text-center text-neutral-500">
-              No tiles yet. Add one above.
+              No tiles yet. Add one above or seed the starter palette.
             </td>
           </tr>
         </tbody>
@@ -345,8 +366,8 @@ function validateLayouts() {
       <h3 class="text-sm font-semibold mb-2">Layout validation</h3>
       <div v-if="!validationResults.length" class="text-emerald-400 text-sm">All layouts look good.</div>
       <ul v-else class="space-y-2">
-        <li v-for="r in validationResults" :key="r.room_id" class="border-l-2 border-amber-600 pl-3 text-sm">
-          <NuxtLink :to="`/world_rooms/${encodeURIComponent('floor1::' + r.room_id)}`" class="text-sky-400 hover:underline font-mono">#{{ r.room_id }} {{ r.name }}</NuxtLink>
+        <li v-for="r in validationResults" :key="`${r.region_id}::${r.room_id}`" class="border-l-2 border-amber-600 pl-3 text-sm">
+          <NuxtLink :to="`/world_rooms/${encodeURIComponent(r.region_id + '::' + r.room_id)}`" class="text-sky-400 hover:underline font-mono">{{ r.region_id }}::{{ r.room_id }} {{ r.name }}</NuxtLink>
           <ul class="ml-4 mt-1 text-neutral-300">
             <li v-for="(iss, i) in r.issues" :key="i" class="font-mono text-xs">• {{ iss }}</li>
           </ul>
