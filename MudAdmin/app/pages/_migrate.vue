@@ -59,7 +59,7 @@ function fmtBytes(n: number) {
 }
 
 function fmtTs(ms: number) {
-  return new Date(ms).toLocaleString()
+  return new Date(Number(ms)).toLocaleString()
 }
 </script>
 
