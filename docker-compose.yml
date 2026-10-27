@@ -32,6 +32,7 @@ x-gateway-base: &gateway-base
 volumes:
   caddy-data:
   caddy-config:
+  mud-admin-snapshots:
 
 networks:
   mud-net:
@@ -77,8 +78,11 @@ services:
     restart: unless-stopped
     environment:
       MUD_DATABASE_URL: ${MUD_DATABASE_URL:?MUD_DATABASE_URL must be set in .env}
+      MUD_SNAPSHOTS_DIR: /srv/app/mud.db.snapshots
       HOST: 0.0.0.0
       PORT: 3000
+    volumes:
+      - mud-admin-snapshots:/srv/app/mud.db.snapshots
     networks:
       - mud-net
     expose:

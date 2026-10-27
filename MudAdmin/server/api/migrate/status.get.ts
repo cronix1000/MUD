@@ -4,7 +4,7 @@ export default defineEventHandler(async () => {
   const [applied, pending, backups] = await Promise.all([
     getAppliedMigrations(),
     getPendingMigrations(),
-    listBackups(),
+    listBackups().catch(() => []),
   ])
   return {
     applied,

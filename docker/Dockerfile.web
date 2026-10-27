@@ -59,6 +59,10 @@ WORKDIR /srv/app
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 web
 
+RUN apk add --no-cache postgresql17-client && \
+    mkdir -p /srv/app/mud.db.snapshots && \
+    chown web:nodejs /srv/app/mud.db.snapshots
+
 COPY --from=build --chown=web:nodejs /repo/app-output /srv/app
 
 USER web
