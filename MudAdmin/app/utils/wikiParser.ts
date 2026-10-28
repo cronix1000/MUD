@@ -1,4 +1,4 @@
-export type EntityType = 'room' | 'npc' | 'mob' | 'item' | 'quest' | 'region' | 'skill' | 'recipe' | 'interactable' | 'zone' | 'loot_table'
+export type EntityType = 'room' | 'npc' | 'mob' | 'item' | 'quest' | 'region' | 'skill' | 'skill_category' | 'recipe' | 'interactable' | 'zone' | 'loot_table' | 'terrain' | 'dialogue' | 'faction' | 'class' | 'race' | 'shop' | 'board'
 
 export interface WikiToken {
   type: 'text' | 'link'
@@ -37,31 +37,8 @@ export function parseWiki(text: string): WikiToken[] {
 }
 
 export function entityHref(type: EntityType, id: string): string {
-  switch (type) {
-    case 'room':
-      return `/world_rooms/${encodeURIComponent(id)}`
-    case 'region':
-      return `/world/regions/${encodeURIComponent(id)}`
-    case 'mob':
-    case 'npc':
-      return `/entities/mob/${encodeURIComponent(id)}`
-    case 'item':
-      return `/entities/item/${encodeURIComponent(id)}`
-    case 'quest':
-      return `/entities/quest/${encodeURIComponent(id)}`
-    case 'skill':
-      return `/entities/skill/${encodeURIComponent(id)}`
-    case 'recipe':
-      return `/entities/recipe/${encodeURIComponent(id)}`
-    case 'interactable':
-      return `/entities/interactable/${encodeURIComponent(id)}`
-    case 'zone':
-      return `/entities/zone/${encodeURIComponent(id)}`
-    case 'loot_table':
-      return `/entities/loot_table/${encodeURIComponent(id)}`
-    default:
-      return '#'
-  }
+  const routeType = type === 'npc' ? 'mob' : type
+  return `/entities/${routeType}/${encodeURIComponent(id)}`
 }
 
 export const ENTITY_COLORS: Record<EntityType, string> = {
@@ -76,9 +53,17 @@ export const ENTITY_COLORS: Record<EntityType, string> = {
   interactable: 'bg-pink-900/40 text-pink-200 border-pink-700/50',
   zone: 'bg-indigo-900/40 text-indigo-200 border-indigo-700/50',
   loot_table: 'bg-orange-900/40 text-orange-200 border-orange-700/50',
+  skill_category: 'bg-violet-900/40 text-violet-200 border-violet-700/50',
+  terrain: 'bg-lime-900/40 text-lime-200 border-lime-700/50',
+  dialogue: 'bg-fuchsia-900/40 text-fuchsia-200 border-fuchsia-700/50',
+  faction: 'bg-rose-900/40 text-rose-200 border-rose-700/50',
+  class: 'bg-blue-900/40 text-blue-200 border-blue-700/50',
+  race: 'bg-cyan-900/40 text-cyan-200 border-cyan-700/50',
+  shop: 'bg-stone-900/40 text-stone-200 border-stone-700/50',
+  board: 'bg-neutral-900/40 text-neutral-200 border-neutral-700/50',
 }
 
-export const knownTypes: EntityType[] = ['room', 'npc', 'mob', 'item', 'quest', 'region', 'skill', 'recipe', 'interactable', 'zone', 'loot_table']
+export const knownTypes: EntityType[] = ['room', 'npc', 'mob', 'item', 'quest', 'region', 'skill', 'skill_category', 'recipe', 'interactable', 'zone', 'loot_table', 'terrain', 'dialogue', 'faction', 'class', 'race', 'shop', 'board']
 
 export const ENTITY_ICONS: Record<EntityType, string> = {
   room: '#',
@@ -92,4 +77,12 @@ export const ENTITY_ICONS: Record<EntityType, string> = {
   interactable: '^',
   zone: '§',
   loot_table: '%',
+  skill_category: '*',
+  terrain: '~',
+  dialogue: '"',
+  faction: 'F',
+  class: 'C',
+  race: 'R',
+  shop: '$',
+  board: 'B',
 }

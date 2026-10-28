@@ -3,7 +3,14 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { resolve as resolvePath, join } from 'node:path'
 
-const ALLOWED_TYPES = new Set(['room', 'quest', 'interactable', 'mob', 'system', 'skills'])
+const ALLOWED_TYPES = new Set(['room', 'quest', 'interactable', 'mob', 'system', 'skills', 'items', 'region'])
+
+const TYPE_DIRS: Record<string, string> = {
+  mob: 'mobs',
+  interactable: 'interactables',
+  system: 'systems',
+  region: 'regions',
+}
 const pExec = promisify(execFile)
 
 function scriptsRoot(): string {
@@ -40,7 +47,7 @@ export function listScripts(type: string): Array<{ path: string; size: number; m
     throw createError({ statusCode: 400, statusMessage: `Unknown script type: ${type}` })
   }
   const root = scriptsRoot()
-  const sub = join(root, type)
+  const sub = join(root, TYPE_DIRS[type] ?? type)
   if (!existsSync(sub)) return []
   return listRecursive(sub, root).sort((a, b) => a.path.localeCompare(b.path))
 }

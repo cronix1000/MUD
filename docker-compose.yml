@@ -47,6 +47,7 @@ services:
     hostname: mud-server
     environment:
       MUD_DATABASE_URL: ${MUD_DATABASE_URL:?MUD_DATABASE_URL must be set in .env}
+      MUD_WORLD_SOURCE: entities
       PORT: 27015
       TZ: ${TZ:-UTC}
     networks:

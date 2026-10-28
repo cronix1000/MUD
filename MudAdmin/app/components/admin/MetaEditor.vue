@@ -118,9 +118,9 @@ function setArrayItem(key: string, idx: number, value: string) {
 <template>
   <div class="space-y-3">
     <div v-for="(spec, key) in specs" :key="key" class="flex flex-col gap-1">
-      <label class="text-sm font-medium text-gray-700">
+      <label class="text-sm font-medium text-neutral-300">
         {{ spec.label ?? key }}
-        <span class="text-xs text-gray-400">({{ key }})</span>
+        <span class="text-xs text-neutral-500">({{ key }})</span>
       </label>
 
       <input
@@ -130,14 +130,14 @@ function setArrayItem(key: string, idx: number, value: string) {
         :max="spec.max"
         :step="spec.type === 'float' ? '0.01' : '1'"
         :value="state[key]"
-        class="border rounded px-2 py-1 text-sm"
+        class="bg-neutral-950 border border-neutral-700 rounded px-2 py-1 text-sm"
         @input="(e) => setField(key, Number((e.target as HTMLInputElement).value))"
       >
 
       <select
         v-else-if="spec.type === 'enum'"
         :value="state[key]"
-        class="border rounded px-2 py-1 text-sm bg-white"
+        class="bg-neutral-950 border border-neutral-700 rounded px-2 py-1 text-sm"
         @change="(e) => setField(key, (e.target as HTMLSelectElement).value)"
       >
         <option v-for="v in spec.values" :key="v" :value="v">{{ v }}</option>
@@ -157,7 +157,7 @@ function setArrayItem(key: string, idx: number, value: string) {
         type="text"
         :maxlength="spec.maxLen"
         :value="state[key]"
-        class="border rounded px-2 py-1 text-sm"
+        class="bg-neutral-950 border border-neutral-700 rounded px-2 py-1 text-sm"
         @input="(e) => setField(key, (e.target as HTMLInputElement).value)"
       >
 
@@ -171,27 +171,27 @@ function setArrayItem(key: string, idx: number, value: string) {
             type="text"
             :value="String(asArray(state[key])[idx] ?? '')"
             :maxlength="spec.itemMaxLen"
-            class="border rounded px-2 py-1 text-sm flex-1"
+            class="bg-neutral-950 border border-neutral-700 rounded px-2 py-1 text-sm flex-1"
             @input="(e) => setArrayItem(key, idx, (e.target as HTMLInputElement).value)"
           >
           <button
             type="button"
-            class="px-2 py-1 text-xs text-red-600 hover:text-red-800"
+            class="px-2 py-1 text-xs text-red-400 hover:text-red-300"
             @click="removeArrayItem(key, idx)"
           >×</button>
         </div>
         <button
           type="button"
-          class="px-2 py-1 text-xs border rounded hover:bg-gray-100"
+          class="px-2 py-1 text-xs bg-neutral-800 border border-neutral-700 rounded hover:bg-neutral-700"
           @click="addArrayItem(key)"
         >+ add element</button>
       </div>
 
-      <p v-if="spec.help" class="text-xs text-gray-500">{{ spec.help }}</p>
+      <p v-if="spec.help" class="text-xs text-neutral-500">{{ spec.help }}</p>
     </div>
 
     <details v-if="Object.keys(state).length > Object.keys(specs).length" class="text-xs">
-      <summary class="cursor-pointer text-gray-500">Custom (unregistered) keys</summary>
+      <summary class="cursor-pointer text-neutral-500">Custom (unregistered) keys</summary>
       <div class="mt-2 space-y-1 pl-3">
         <div
           v-for="(_, key) in Object.fromEntries(Object.entries(state).filter(([k]) => !(k in specs)))"

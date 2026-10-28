@@ -1,7 +1,13 @@
 # MudAdmin UI Remake — Plan (draft)
 
-Status: proposal, not yet approved. This document starts the redesign effort for the admin
-builder's look. Nothing here is implemented yet; phases land one at a time and each keeps
+Status: partially superseded (2026-10). The editor-focused parts of this plan shipped with the
+schema-driven editor revamp: the `Ui*` primitives (§4 subset: UiButton/UiPanel/UiTabs/UiToast/
+UiConfirmDialog + `useToast`), config-driven create panels (§6 `EntityCreatePanel`), sectioned
+editors with sticky save bar, dirty guard, Raw JSON tab, duplicate + confirm dialogs + toasts,
+and list-page pagination/sort/bulk actions. Remaining unimplemented: design tokens/theme.css,
+full sidebar IA regroup, `Ctrl+K` palette, compact table toggle, overview restyle, a11y pass.
+See `AGENTS.md` §"World documents" for the architecture as built. This document starts the redesign effort for the admin
+builder's look. Remaining phases land one at a time and each keeps
 `npm run build:admin` green.
 
 ## 1. Where we are

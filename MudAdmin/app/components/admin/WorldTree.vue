@@ -15,7 +15,7 @@ function toggleRegion(id: string) {
 const roomHref = (r: string, id: number) =>
   `/world_rooms/${encodeURIComponent(r + '::' + id)}`
 const regionHref = (id: string) =>
-  `/world/regions/${encodeURIComponent(id)}`
+  `/entities/region/${encodeURIComponent(id)}`
 const mapHref = (id: string) =>
   `/world/regions/${encodeURIComponent(id)}/map`
 

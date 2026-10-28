@@ -6,11 +6,7 @@ interface ScriptRef {
   script_ref?: string | null
 }
 
-interface ScriptItem {
-  path: string
-  size: number
-  mtime: number
-}
+type BrowseField = 'on_enter' | 'on_exit' | 'on_pulse' | 'script_ref'
 
 const props = defineProps<{
   modelValue: ScriptRef
@@ -20,54 +16,24 @@ const props = defineProps<{
 const emit = defineEmits<{ 'update:modelValue': [ScriptRef] }>()
 
 function update<K extends keyof ScriptRef>(key: K, value: string) {
-  emit('update:modelValue', { ...props.modelValue, [key]: value || null })
+  const next = { ...props.modelValue }
+  if (value) next[key] = value
+  else delete next[key]
+  emit('update:modelValue', next)
 }
 
 const showBrowse = ref(false)
-const browseType = ref<'room' | 'mob' | 'quest' | 'interactable'>('room')
-const scripts = ref<ScriptItem[]>([])
-const scriptRoot = ref('')
-const loading = ref(false)
-const fileBody = ref<string | null>(null)
-const previewing = ref<string | null>(null)
-const previewError = ref<string | null>(null)
+const browseField = ref<BrowseField>('script_ref')
 const validateResults = ref<Array<{ path: string; ok: boolean; error?: string; missing?: boolean }> | null>(null)
 const validating = ref(false)
 
-async function openBrowse(type: 'room' | 'mob' | 'quest' | 'interactable') {
-  browseType.value = type
+function openBrowse(field: BrowseField) {
+  browseField.value = field
   showBrowse.value = true
-  loading.value = true
-  try {
-    const res = await $fetch<{ type: string; root: string; scripts: ScriptItem[] }>(`/api/scripts/list`, {
-      params: { type },
-    })
-    scripts.value = res.scripts
-    scriptRoot.value = res.root
-  } finally {
-    loading.value = false
-  }
-}
-
-async function preview(path: string) {
-  previewing.value = path
-  previewError.value = null
-  fileBody.value = null
-  try {
-    const res = await $fetch<{ path: string; body: string }>(`/api/scripts/${path}`)
-    fileBody.value = res.body
-  } catch (e: unknown) {
-    const err = e as { data?: { statusMessage?: string } }
-    previewError.value = err.data?.statusMessage ?? 'Failed to load'
-  }
 }
 
 function pick(path: string) {
-  if (props.type === 'room') {
-    update('on_enter', 'on_enter')
-  } else {
-    update('script_ref', path)
-  }
+  update(browseField.value, path)
   showBrowse.value = false
 }
 
@@ -75,6 +41,16 @@ function vscodeUrl(path: string): string {
   const abs = scriptRoot.value ? `${scriptRoot.value.replace(/\\/g, '/')}/${path}` : path
   return `vscode://file/${encodeURI(abs).replace(/^\//, '')}`
 }
+
+const scriptRoot = ref('')
+onMounted(async () => {
+  try {
+    const res = await $fetch<{ root: string }>('/api/scripts/root')
+    scriptRoot.value = res.root
+  } catch {
+    scriptRoot.value = ''
+  }
+})
 
 const referenced = computed(() => {
   const refs: string[] = []
@@ -99,11 +75,6 @@ async function validateAll() {
     validating.value = false
   }
 }
-
-const absolutePaths = computed(() => {
-  if (!scriptRoot.value) return []
-  return referenced.value.map((p) => `${scriptRoot.value}\\${p}`)
-})
 </script>
 
 <template>
@@ -118,7 +89,7 @@ const absolutePaths = computed(() => {
             class="flex-1 bg-neutral-950 border border-neutral-700 rounded px-2 py-1 font-mono text-sm"
             placeholder="room/room_one.lua"
           />
-          <button class="px-2 py-1 text-xs bg-neutral-800 hover:bg-neutral-700 rounded" @click="openBrowse('room')">…</button>
+          <button class="px-2 py-1 text-xs bg-neutral-800 hover:bg-neutral-700 rounded" @click="openBrowse('on_enter')">…</button>
         </div>
       </div>
       <div>
@@ -128,8 +99,9 @@ const absolutePaths = computed(() => {
             :value="modelValue.on_exit ?? ''"
             @input="update('on_exit', ($event.target as HTMLInputElement).value)"
             class="flex-1 bg-neutral-950 border border-neutral-700 rounded px-2 py-1 font-mono text-sm"
+            placeholder="room/room_one.lua"
           />
-          <button class="px-2 py-1 text-xs bg-neutral-800 hover:bg-neutral-700 rounded" @click="openBrowse('room')">…</button>
+          <button class="px-2 py-1 text-xs bg-neutral-800 hover:bg-neutral-700 rounded" @click="openBrowse('on_exit')">…</button>
         </div>
       </div>
       <div>
@@ -139,8 +111,9 @@ const absolutePaths = computed(() => {
             :value="modelValue.on_pulse ?? ''"
             @input="update('on_pulse', ($event.target as HTMLInputElement).value)"
             class="flex-1 bg-neutral-950 border border-neutral-700 rounded px-2 py-1 font-mono text-sm"
+            placeholder="room/room_one.lua"
           />
-          <button class="px-2 py-1 text-xs bg-neutral-800 hover:bg-neutral-700 rounded" @click="openBrowse('room')">…</button>
+          <button class="px-2 py-1 text-xs bg-neutral-800 hover:bg-neutral-700 rounded" @click="openBrowse('on_pulse')">…</button>
         </div>
       </div>
     </div>
@@ -153,7 +126,7 @@ const absolutePaths = computed(() => {
           class="flex-1 bg-neutral-950 border border-neutral-700 rounded px-2 py-1 font-mono text-sm"
           placeholder="mobs/goblin_grunt.lua"
         />
-        <button class="px-2 py-1 text-xs bg-neutral-800 hover:bg-neutral-700 rounded" @click="openBrowse('mob')">…</button>
+        <button class="px-2 py-1 text-xs bg-neutral-800 hover:bg-neutral-700 rounded" @click="openBrowse('script_ref')">…</button>
       </div>
     </div>
 
@@ -179,34 +152,6 @@ const absolutePaths = computed(() => {
       </div>
     </div>
 
-    <div v-if="showBrowse" class="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50" @click.self="showBrowse = false">
-      <div class="bg-neutral-900 border border-neutral-700 rounded p-4 w-full max-w-4xl max-h-[80vh] overflow-auto">
-        <div class="flex items-center justify-between mb-3">
-          <h3 class="text-lg font-semibold">Pick a script — {{ browseType }}/</h3>
-          <button class="text-sm text-neutral-400 hover:text-neutral-200" @click="showBrowse = false">close</button>
-        </div>
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <div v-if="loading" class="text-neutral-500">Loading…</div>
-            <ul v-else class="space-y-1 text-sm font-mono">
-              <li v-for="s in scripts" :key="s.path" class="flex items-center gap-2 hover:bg-neutral-800 px-2 py-1 rounded cursor-pointer" @click="preview(s.path)">
-                <span class="flex-1">{{ s.path }}</span>
-                <a :href="vscodeUrl(s.path)" target="_blank" class="text-sky-400 hover:underline text-xs">VSCode</a>
-                <button class="text-emerald-400 hover:underline text-xs" @click.stop="pick(s.path)">use</button>
-              </li>
-              <li v-if="!scripts.length" class="text-neutral-500">No .lua files in scripts/{{ browseType }}/</li>
-            </ul>
-          </div>
-          <div>
-            <div v-if="!previewing" class="text-neutral-500">Click a path to preview.</div>
-            <div v-else>
-              <div class="text-sm text-neutral-400 mb-1">{{ previewing }}</div>
-              <pre v-if="fileBody" class="bg-neutral-950 p-2 rounded text-xs overflow-auto max-h-80"><code>{{ fileBody }}</code></pre>
-              <div v-if="previewError" class="text-red-400 text-sm">{{ previewError }}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <AdminScriptBrowseModal v-if="showBrowse" :kind="type === 'room' ? 'room' : 'mob'" @pick="pick" @close="showBrowse = false" />
   </div>
 </template>

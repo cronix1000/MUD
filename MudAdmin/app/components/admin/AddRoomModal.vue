@@ -99,7 +99,6 @@ async function submit() {
           room_id: newId,
           name: name.value.trim(),
           description: description.value || '',
-          terrain: terrain.value || null,
           width: width.value,
           height: height.value,
           layout: JSON.parse(layoutJson.value),

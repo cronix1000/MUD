@@ -491,7 +491,6 @@ async function save() {
       room_id: roomId.value,
       name: draft.name,
       description: draft.description ?? '',
-      terrain: draft.terrain || null,
       width: Number(draft.width),
       height: Number(draft.height),
       layout: [...draft.layout],
@@ -502,6 +501,8 @@ async function save() {
       exits: exitsMap,
       spawns: spawnsList,
     }
+    if (draft.terrain) doc.terrain = draft.terrain
+    else delete doc.terrain
     if (rules) doc.rules = rules
     else delete doc.rules
 
@@ -780,7 +781,7 @@ async function createRoomFrom(fromRoomId: number | null, direction: string | nul
           >fill all with "{{ draft.terrain || '·' }}"</button>
           <span class="text-xs text-neutral-500">·</span>
           <NuxtLink
-            to="/world/terrains"
+            to="/entities/terrain"
             class="text-xs text-sky-400 hover:underline"
             title="Add or edit tiles"
           >+ add tile to palette ↗</NuxtLink>
@@ -794,7 +795,7 @@ async function createRoomFrom(fromRoomId: number | null, direction: string | nul
           @update:layout="(rows) => draft.layout = rows"
         />
         <div v-if="unrecognizedInLayout.length" class="text-xs text-amber-400">
-          Unrecognized symbols: {{ unrecognizedInLayout.join(' ') }} — add them in <NuxtLink to="/world/terrains" class="underline">Palette</NuxtLink>.
+          Unrecognized symbols: {{ unrecognizedInLayout.join(' ') }} — add them in <NuxtLink to="/entities/terrain" class="underline">Palette</NuxtLink>.
         </div>
       </div>
     </div>

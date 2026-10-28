@@ -60,7 +60,7 @@ const playerTables = computed(() => (tablesData.value?.tables ?? []).filter((x) 
 const isActive = {
   overview: () => current.value[0] === 'overview',
   regions: () => current.value[0] === 'world' && current.value[1] === 'regions',
-  terrains: () => current.value[0] === 'world' && current.value[1] === 'terrains',
+  terrains: () => current.value[0] === 'entities' && current.value[1] === 'terrain',
   scripts: () => current.value[0] === 'scripts',
   migrate: () => current.value[0] === '_migrate',
   snapshots: () => current.value[0] === 'snapshots',
@@ -83,7 +83,7 @@ const isActive = {
           <NuxtLink to="/world/regions" class="block px-2 py-1 rounded hover:bg-neutral-800 text-sm" :class="{ 'bg-neutral-800': isActive.regions() }">Regions</NuxtLink>
         </li>
         <li>
-          <NuxtLink to="/world/terrains" class="block px-2 py-1 rounded hover:bg-neutral-800 text-sm" :class="{ 'bg-neutral-800': isActive.terrains() }">Terrain palette</NuxtLink>
+          <NuxtLink to="/entities/terrain" class="block px-2 py-1 rounded hover:bg-neutral-800 text-sm" :class="{ 'bg-neutral-800': isActive.terrains() }">Terrain palette</NuxtLink>
         </li>
         <li>
           <NuxtLink to="/scripts" class="block px-2 py-1 rounded hover:bg-neutral-800 text-sm" :class="{ 'bg-neutral-800': isActive.scripts() }">Scripts</NuxtLink>
@@ -151,5 +151,6 @@ const isActive = {
     <main class="flex-1 p-6 overflow-auto">
       <slot />
     </main>
+    <UiToast />
   </div>
 </template>

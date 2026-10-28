@@ -7,6 +7,8 @@ const props = defineProps<{
   placeholder?: string
 }>()
 
+const knownEntityTypes: EntityType[] = knownTypes
+
 const emit = defineEmits<{ 'update:modelValue': [string] }>()
 
 const text = ref(props.modelValue)
@@ -17,8 +19,6 @@ function onInput(e: Event) {
   text.value = target.value
   emit('update:modelValue', target.value)
 }
-
-const knownEntityTypes: EntityType[] = ['room', 'npc', 'mob', 'item', 'quest', 'region', 'skill', 'recipe', 'interactable', 'zone']
 
 interface SearchResult { type: string; id: string; name: string; href: string }
 const showPicker = ref(false)

@@ -50,15 +50,33 @@ After running migrations at `/admin/_migrate`, the following world-building page
 
 ## World documents (`world.entities`)
 
-Static world content is migrating to a single document table: `world.entities (entity_type, entity_id, doc JSONB, parent_id, mod_origin)`. One row per entity; one `PUT` per save.
+All static world content lives in `world.entities (entity_type, entity_id, doc JSONB, parent_id, mod_origin)`. One row per entity; one `PUT` per save.
 
-- **Pages** — `/entities/{type}` (list + create + delete) and `/entities/{type}/{id}` (doc editor: typed fields for registered keys, Raw JSON for everything else, `parent_id` for prototype inheritance). Sidebar group "Documents".
-- **API** — `server/api/entities/[type]/...` (`GET` list with `q` search, `POST` create, `[id] GET/PUT/DELETE`). `PUT` replaces the whole doc in one transactional call — there is no N+1 child-table dance.
-- **Field registry** — `app/utils/entitySchemas.ts` is the single source of truth for per-type fields and widget types (`text | textarea | number | bool | json | script`). Adding a field to the admin UI = adding an entry; unknown doc keys still round-trip via Raw JSON.
-- **Server helpers** — `server/utils/entities.ts` (`listEntities`, `getEntity`, `upsertEntity`, `deleteEntity`). Do not write SQL against `world.entities` from pages; go through these or the API.
+### Editor architecture
+
+- **Field registry** — `app/utils/entitySchemas.ts` is the single source of truth for per-type fields. Each type has `sections` (titled groups) of field specs with a widget vocabulary:
+  `text | textarea | number | bool | select | color | bgcolor | script | ref | wikitext | array | map | group | json`.
+  Fields can declare `label`, `help`, `required`, `min/max`, `options`, `refType` (entity picker), `scriptKind` (Lua browse dir), `columns` (array rows), `mapKeyRefType`/`mapValue` (map rows). Adding a field to the admin UI = adding a registry entry; unknown doc keys still round-trip via the Raw JSON tab.
+- **Generic engine** — `app/components/EntityDocEditor.vue` renders any type from its schema: sectioned cards, widget dispatch, dirty guard + Revert, duplicate, Raw JSON tab with inline parse errors, parent_id picker with a resolved-merge preview matching `PostgresDatabase::MergeDocs` semantics (objects deep-merge, arrays/scalars replace).
+- **List pages** — `/entities/{type}` renders pagination + sorting + search + row duplicate/delete + bulk select-delete; terrain uses `listMode: 'palette'` (spreadsheet palette view, `app/components/TerrainPaletteView.vue`, with "Validate all layouts").
+- **Custom editors** — mob/item/room/interactable/zone/dialogue/loot_table keep dedicated editors (branch chain in `app/pages/entities/[type]/[id].vue`); region uses `AdminRegionEditor`. Terrain and region live under `/entities/{type}` now; `/world/terrains` and `/world/regions/{id}` redirect.
+- **Create panels** — one config-driven `EntityCreatePanel.vue` (modal) replaces the per-type create forms; room next-free-room-id and zone auto-numbering remain as per-type plugins inside it.
+- **UI primitives** — `app/components/ui/` (`UiButton`, `UiPanel`, `UiTabs`, `UiToast`, `UiConfirmDialog`) + `useToast()` composable. Use these instead of hand-classed buttons/`confirm()`/ad-hoc error `<p>`s.
+
+### Server
+
+- **API** — `server/api/entities/[type]/...`: `GET` list (`q`, `sort=id|name|updated`, `limit`, `offset`, returns `total`), `POST` create, `[id] GET/PUT/DELETE`, `[id]/references GET` (referenced-by scan shown in delete confirms), collection `DELETE` with `{ids}` for bulk.
+- **Server helpers** — `server/utils/entities.ts` (`listEntities`, `countEntities`, `getEntity`, `upsertEntity`, `deleteEntity`, `deleteEntitiesBulk`). `upsertEntity` validates the parent chain (exists, no cycles, no self-reference) and stamps `mod_origin: 'admin'`. Do not write SQL against `world.entities` from pages; go through these or the API.
+- **Scripts API** — `GET /api/scripts/list?type=` accepts `room | quest | interactable | mob | system | skills | items | region` (plural dirs are mapped); `GET /api/scripts/root` returns the scripts root for VSCode deep links.
+
+### Terrain
+
+- Docs store MUD color codes: `&x`-style foreground, `{x`-style background (vocabulary mirrored in `app/utils/ansi.ts`). The C++ `TextHelperFunctions::Colorize` translates both to ANSI. Note `&w` is ANSI reset (not white) and `&D`/`&n`/`&o`/`&p` fold to nearest basic colors.
+- Terrain docs: `{symbol, name, description, color, bg_color, blocks_move, blocks_sight, move_cost}`. The server enforces `blocks_move` (movement), `blocks_sight` (Bresenham LOS fog in the grid), loads `description`/`bg_color`; `move_cost` is loaded but has no runtime consumer yet (no stamina pool). `examine <symbol-or-name>` describes a tile.
+- No seeding UI: the seed endpoints (`/api/terrains/seed*`) still exist but are not surfaced anywhere.
+
 - **Backfill** — `scripts/entities-backfill.mjs` at the repo root (dry-run by default; `--apply` writes; idempotent; preserves `parent_id` on conflict).
-- **Migration 30** drops empty legacy `world_*` tables (conditional: non-empty tables survive, so it is safe on prod). In beta this removed quests/dialogues/loot/skills/recipes/factions/races/shops/board/zones/field_definitions. The old specialized pages `/world/quests`, `/recipes`, `/loot`, `/world_zones/[id]` redirect to their `/entities/*` counterparts; overview stats, nav-tree zones, and `/api/search/entities` read `world.entities` for those types (with legacy fallback for prod).
-- **Legacy tables** — the remaining old `world_*` row tables (regions, rooms, exits, spawns, terrains, items, mobs, interactables) and their specialized editors keep working until those editors migrate; then a later migration drops them.
+- **Migration 30** dropped empty legacy `world_*` tables. `/api/search/entities` and `/api/overview/stats` read `world.entities` directly (no legacy fallbacks anymore). Old URLs (`/world_rooms/...`, `/loot`, `/recipes`, `/world/quests`, `/world_mobs/...`, etc.) redirect to `/entities/*`.
 
 ## Wiki links (`[[type:id]]`)
 
@@ -67,8 +85,8 @@ Symbolic cross-entity references in `description`, `loot_drop`, `template_id`, `
 - Syntax is decoration only — on save, `resolveWikiId(value, worldId)` strips the `worldId::` prefix where applicable, so DB columns always store the bare local id (`goblin`, `floor1::3`, etc.).
 - `WikiIdInput` is a single-line input with `[[` autocomplete. `WikiText` is a textarea with the same picker plus a clickable badge preview.
 - Picker trigger regex: `/\[\[([a-z]+)?(:([^\]\n]*))?$/`. On `[[mob` it shows all mobs; `[[mob:g` filters to goblin; bare `[[` shows type chip-strip buttons.
-- Type-aware search endpoint: `GET /api/search/entities?type=<mob|npc|item|quest|region|skill|recipe|room|interactable>&world_id=<worldId>&q=<query>`. Wildcard path (`no type`) still works. Hrefs encode the full composite key (e.g. `default::floor1::1`).
-- Adding a new entity type: add to `EntityType` + `ENTITY_COLORS` + `ENTITY_ICONS` + `knownTypes` in `app/utils/wikiParser.ts`, plus the matching case in `buildHref()` in `server/api/search/entities.get.ts` and `entityHref()` in `app/utils/wikiParser.ts`.
+- Type-aware search endpoint: `GET /api/search/entities?type=<type>&q=<query>` reads `world.entities` for all 19 types (`npc` is a filtered alias of `mob`); wildcard (no type) covers mob/item/quest/region/skill/recipe/room/zone/loot_table. All hrefs point at `/entities/{type}/{id}`.
+- Adding a new entity type: add to `EntityType` + `ENTITY_COLORS` + `ENTITY_ICONS` + `knownTypes` in `app/utils/wikiParser.ts` (all hrefs are generated from the type), plus `VALID_TYPES` in `server/api/search/entities.get.ts`.
 
 ## Migrations
 

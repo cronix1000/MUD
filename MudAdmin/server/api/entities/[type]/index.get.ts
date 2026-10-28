@@ -1,5 +1,5 @@
 import { isEntityType } from '../../../../app/utils/entitySchemas'
-import { entityCounts, listEntities } from '../../../utils/entities'
+import { countEntities, entityCounts, listEntities } from '../../../utils/entities'
 
 export default defineEventHandler(async (event) => {
   const type = String(getRouterParam(event, 'type'))
@@ -12,7 +12,9 @@ export default defineEventHandler(async (event) => {
     q: q || undefined,
     limit: Number(query.limit ?? 200) || 200,
     offset: Number(query.offset ?? 0) || 0,
+    sort: String(query.sort ?? 'id'),
   })
+  const total = await countEntities(type, q || undefined)
   const counts = query.counts === '1' || query.counts === 'true' ? await entityCounts() : null
-  return { type, rows, counts }
+  return { type, total, rows, counts }
 })

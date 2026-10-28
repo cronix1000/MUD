@@ -99,7 +99,7 @@ async function createRegion() {
         class="block p-4 rounded border border-neutral-800 hover:border-neutral-600 bg-neutral-900"
       >
         <NuxtLink
-          :to="`/world/regions/${encodeURIComponent(r.id)}`"
+          :to="`/entities/region/${encodeURIComponent(r.id)}`"
           class="font-mono text-sm hover:underline"
         >{{ r.id }}</NuxtLink>
         <div v-if="r.name" class="text-neutral-200 text-sm mt-1">{{ r.name }}</div>
@@ -111,7 +111,7 @@ async function createRegion() {
           >map</NuxtLink>
           <span class="text-neutral-700">·</span>
           <NuxtLink
-            :to="`/world/regions/${encodeURIComponent(r.id)}`"
+            :to="`/entities/region/${encodeURIComponent(r.id)}`"
             class="text-sky-400 hover:underline"
           >edit</NuxtLink>
         </div>

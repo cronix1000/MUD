@@ -109,7 +109,7 @@ Static world content lives in `world.entities (entity_type, entity_id, doc JSONB
 - Adding an entity kind = rows with a new `entity_type` + a schema entry. No DDL.
 - Prototype inheritance: `parent_id` references another entity of the same type; the C++ loader merges parent then child (objects deep-merge, arrays/scalars replace).
 - Promotion ladder for hot query paths: doc field -> expression index -> generated column. Migrations only for those.
-- The C++ server selects the source via `MUD_WORLD_SOURCE=entities` (unset/`legacy` = old `world_*` row tables). Backfill: `scripts/entities-backfill.mjs` (dry-run by default, `--apply` to write, idempotent).
+- The C++ server loads the document model by default; set `MUD_WORLD_SOURCE=legacy` to force the old `world_*` row tables (only for databases predating migration 30, which drops those tables once empty). Backfill: `scripts/entities-backfill.mjs` (dry-run by default, `--apply` to write, idempotent).
 - Player state: `players.player_players.state JSONB` holds `{stats, body_mods, variables, inventory}`; the legacy `data` column is written in parallel during transition. `player_faction_standing` and `player_known_recipes` remain tables (independent per-key runtime update paths).
 
 ## Worldbuilding & admin responsibilities
