@@ -31,7 +31,7 @@ export TAG REGISTRY
 echo "[deploy] tag=$TAG branch=${BRANCH:-main} repo=$REPO_DIR"
 
 echo "[deploy] refresh repo"
-git fetch --quiet origin
+git fetch --quiet --no-recurse-submodules origin
 if ! git show-ref --verify --quiet "refs/heads/main"; then
   git branch --track main origin/main
 fi
