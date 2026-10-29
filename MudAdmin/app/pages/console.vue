@@ -11,6 +11,7 @@ const TOKEN_KEY = 'mud_admin_console_token'
 const token = ref('')
 const tokenInput = ref('')
 const tokenError = ref('')
+const showToken = ref(false)
 const authed = ref(false)
 const checking = ref(false)
 
@@ -57,6 +58,8 @@ async function connect(t: string) {
   } catch (e: unknown) {
     const err = e as { data?: { statusMessage?: string } }
     tokenError.value = err.data?.statusMessage ?? 'Could not reach the server console'
+    localStorage.removeItem(TOKEN_KEY)
+    if (t === token.value) token.value = ''
   } finally {
     checking.value = false
   }
@@ -192,14 +195,17 @@ function fmtTime(at: number) {
 
     <div v-else-if="!authed" class="bg-neutral-900 border border-neutral-800 rounded p-4 space-y-3 max-w-md">
       <h3 class="text-sm font-semibold text-neutral-200">Admin token required</h3>
-      <p class="text-xs text-neutral-400">Enter the value of <code>MUD_ADMIN_TOKEN</code>. It is kept in this browser only.</p>
+      <p class="text-xs text-neutral-400">Enter the value of <code>MUD_ADMIN_TOKEN</code> (see <code>docker/.env</code> / <code>docker exec mud-admin printenv MUD_ADMIN_TOKEN</code>). It is kept in this browser only.</p>
       <form class="flex gap-2" @submit.prevent="connect(tokenInput)">
         <input
           v-model="tokenInput"
-          type="password"
+          :type="showToken ? 'text' : 'password'"
           placeholder="MUD_ADMIN_TOKEN"
+          spellcheck="false"
+          autocomplete="off"
           class="flex-1 bg-neutral-950 border border-neutral-700 rounded px-2 py-1.5 text-sm font-mono focus:outline-none focus:border-emerald-600"
         >
+        <UiButton size="sm" @click="showToken = !showToken">{{ showToken ? 'Hide' : 'Show' }}</UiButton>
         <UiButton variant="primary" type="submit" :loading="checking">Connect</UiButton>
       </form>
       <div v-if="tokenError" class="text-sm text-red-300">{{ tokenError }}</div>
