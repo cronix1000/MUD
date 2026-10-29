@@ -84,7 +84,7 @@ export function runConsoleCommand(command: string): Promise<string> {
           if (msg.authenticated === true) {
             authenticated = true
             socket.write(JSON.stringify({ id: requestId, cmd: command }) + '\n')
-          } else {
+          } else if (msg.authenticated === false) {
             finish(new Error(msg.error || 'Console auth failed'))
             return
           }
