@@ -49,11 +49,14 @@ services:
       MUD_DATABASE_URL: ${MUD_DATABASE_URL:?MUD_DATABASE_URL must be set in .env}
       MUD_WORLD_SOURCE: entities
       PORT: 27015
+      MUD_ADMIN_TOKEN: ${MUD_ADMIN_TOKEN:-}
+      MUD_ADMIN_PORT: 27016
       TZ: ${TZ:-UTC}
     networks:
       - mud-net
     expose:
       - "27015"
+      - "27016"
 
   mud-gateway:
     <<: *gateway-base
@@ -80,6 +83,9 @@ services:
     environment:
       MUD_DATABASE_URL: ${MUD_DATABASE_URL:?MUD_DATABASE_URL must be set in .env}
       MUD_SNAPSHOTS_DIR: /srv/app/mud.db.snapshots
+      MUD_ADMIN_TOKEN: ${MUD_ADMIN_TOKEN:-}
+      MUD_CONSOLE_HOST: mud-server
+      MUD_CONSOLE_PORT: 27016
       HOST: 0.0.0.0
       PORT: 3000
     volumes:

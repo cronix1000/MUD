@@ -64,6 +64,7 @@ const isActive = {
   scripts: () => current.value[0] === 'scripts',
   migrate: () => current.value[0] === '_migrate',
   snapshots: () => current.value[0] === 'snapshots',
+  console: () => current.value[0] === 'console',
   entity: (t: string) => current.value[0] === 'entities' && current.value[1] === t,
   table: (t: string) => current.value.includes(t),
 }
@@ -120,6 +121,9 @@ const isActive = {
             </li>
             <li>
               <NuxtLink to="/snapshots" class="block px-2 py-1 rounded hover:bg-neutral-800 text-sm" :class="{ 'bg-neutral-800': isActive.snapshots() }">Snapshots</NuxtLink>
+            </li>
+            <li>
+              <NuxtLink to="/console" class="block px-2 py-1 rounded hover:bg-neutral-800 text-sm" :class="{ 'bg-neutral-800': isActive.console() }">Server console</NuxtLink>
             </li>
           </ul>
 
