@@ -46,7 +46,7 @@ Each app sits at the root of its own origin — no URL prefix, no `baseURL`, no 
 
 World content (regions, rooms, items, mobs, …) and player accounts live in a single Postgres 16 instance configured by `MUD_DATABASE_URL` (libpq-style URL; the role-level `search_path = world, players, _meta, public` is set by `docker/postgresql/init/00-bootstrap.sh` so unqualified table names resolve into the right schema without needing URL options).
 
-The C++ server (`ModularMudServer/PostgresDatabase.cpp`) and the admin UI (`MudAdmin/server/utils/db.ts`) both connect through this URL. `mud-server`, `mud-admin`, and any future migration tool read **only** from Postgres at runtime. There is no SQLite fallback at runtime; if `MUD_DATABASE_URL` is unset, both services refuse to start.
+The C++ server (`ModularMudServer/Src/Database/PostgresDatabase.cpp`) and the admin UI (`MudAdmin/server/utils/db.ts`) both connect through this URL. `mud-server`, `mud-admin`, and any future migration tool read **only** from Postgres at runtime. There is no SQLite fallback at runtime; if `MUD_DATABASE_URL` is unset, both services refuse to start.
 
 The legacy SQLite files (`mud.world.db`, `mud.players.db`) exist only as a transition aid:
 
@@ -66,7 +66,7 @@ This repo uses **Pattern 1**: secrets live in env files on the host (`docker/.en
 | `MudAdmin` (local dev) | `MudAdmin/.env` → `MUD_DATABASE_URL` |
 | `mud-admin` (deployed prod) | `docker-compose.yml` reads `MUD_DATABASE_URL` |
 
-Canonical URL shapes (no `?options=...` segment — `ModularMudServer/PostgresDatabase.cpp:51-66` and `MudAdmin/server/utils/db.ts:43-52` set `search_path` per-connect, and the role default is set by `docker/postgresql/init/00-bootstrap.sh:60-61`):
+Canonical URL shapes (no `?options=...` segment — `ModularMudServer/Src/Database/PostgresDatabase.cpp:51-66` and `MudAdmin/server/utils/db.ts:43-52` set `search_path` per-connect, and the role default is set by `docker/postgresql/init/00-bootstrap.sh:60-61`):
 
 ```
 # Local dev (Windows + SSH tunnel)
@@ -96,7 +96,7 @@ postgresql://mud_prod:<pw>@127.0.0.1:5432/mud_prod?options=-c+search_path=world,
 
 `mud-server.exe` runs on a Windows host and reaches the VPS Postgres through an SSH tunnel (host loopback `127.0.0.1:5432`). Full procedure, including the firewall/rationale, is in `scripts/postgres-connection.md`. The two things that bite newcomers most:
 
-1. `mud-server.exe` issues `SET search_path TO world, players, _meta, public` itself on every connect (`ModularMudServer/PostgresDatabase.cpp:54-58`). MudAdmin's pool does the same on each new client (`MudAdmin/server/utils/db.ts:47-50`). The role default is set by `docker/postgresql/init/00-bootstrap.sh` for fresh volumes and `01-search-path.sh` for existing ones. **None of the three need URL `?options=...`**. Note: when both URL options and the C++/admin `SET` are present, the per-session URL option wins — so URLs should NOT include `?options=-c%20search_path=...`.
+1. `mud-server.exe` issues `SET search_path TO world, players, _meta, public` itself on every connect (`ModularMudServer/Src/Database/PostgresDatabase.cpp:54-58`). MudAdmin's pool does the same on each new client (`MudAdmin/server/utils/db.ts:47-50`). The role default is set by `docker/postgresql/init/00-bootstrap.sh` for fresh volumes and `01-search-path.sh` for existing ones. **None of the three need URL `?options=...`**. Note: when both URL options and the C++/admin `SET` are present, the per-session URL option wins — so URLs should NOT include `?options=-c%20search_path=...`.
 2. The dev tunnel points at the prod database. Take a snapshot (`/admin/snapshots`) before destructive experimentation.
 
 A template URL lives in `ModularMudServer/.env.example`.
@@ -122,7 +122,7 @@ The admin (`MudAdmin/`) is the source of truth for game-world content. It owns:
 - Snapshots (`/admin/snapshots`) — manual `pg_dump` files for human-driven rollback.
 - Generator scripts for `instanced` regions — Lua files under `ModularMudServer/scripts/regions/generators/` edited in VSCode.
 
-The C++ server reads Postgres at boot (`ModularMudServer/PostgresDatabase.cpp`) and picks up Lua scripts on `ScriptManager::load_all_scripts`. Any new column, table, or script convention must match across all three (admin ↔ DB ↔ C++).
+The C++ server reads Postgres at boot (`ModularMudServer/Src/Database/PostgresDatabase.cpp`) and picks up Lua scripts on `ScriptManager::load_all_scripts`. Any new column, table, or script convention must match across all three (admin ↔ DB ↔ C++).
 
 ## General Rules for Agents
 

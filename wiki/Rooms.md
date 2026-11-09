@@ -6,20 +6,20 @@ A room is the smallest navigable unit in the world. Players stand in a cell of a
 
 A room is one row in `world.world_rooms`:
 
-| Column | Type | Required | Notes |
-|---|---|---|---|
-| `region_id` | `text` | yes | Composite PK half; FK target is `world_regions.id` (no DB-level FK today; enforced by the admin). |
-| `room_id` | `integer` | yes | Composite PK half; **region-scoped, unique**. See "ID assignment" below. |
-| `name` | `text` | yes | Short noun phrase. Shown in `look`, the map, GMCP `Room.Info`, and inventory prompts. |
-| `description` | `text` | no | Long-form prose; supports `[[type:id]]` wiki links. |
-| `terrain` | `text` | no | Display hint for the per-region palette. Free-form string. |
-| `width` | `integer` | yes (>=1) | Grid columns. |
-| `height` | `integer` | yes (>=1) | Grid rows. |
-| `layout_json` | `jsonb/text` | yes | Array of `height` strings, each exactly `width` chars. Each char references a `world_terrains.symbol`. |
-| `spawn_x` | `integer` | no | Pixel-style grid coords (default `null`). Used by clients that draw the room as a mini-map. |
-| `spawn_y` | `integer` | no | Same. |
-| `scripts_json` | `jsonb/text` | no | Per-room Lua entry points. See [[Database]] for shape. |
-| `extra_json` | `jsonb/text` | no | Free-form extension bag. |
+| Column         | Type         | Required  | Notes                                                                                                  |
+| -------------- | ------------ | --------- | ------------------------------------------------------------------------------------------------------ |
+| `region_id`    | `text`       | yes       | Composite PK half; FK target is `world_regions.id` (no DB-level FK today; enforced by the admin).      |
+| `room_id`      | `integer`    | yes       | Composite PK half; **region-scoped, unique**. See "ID assignment" below.                               |
+| `name`         | `text`       | yes       | Short noun phrase. Shown in `look`, the map, GMCP `Room.Info`, and inventory prompts.                  |
+| `description`  | `text`       | no        | Long-form prose; supports `[[type:id]]` wiki links.                                                    |
+| `terrain`      | `text`       | no        | Display hint for the per-region palette. Free-form string.                                             |
+| `width`        | `integer`    | yes (>=1) | Grid columns.                                                                                          |
+| `height`       | `integer`    | yes (>=1) | Grid rows.                                                                                             |
+| `layout_json`  | `jsonb/text` | yes       | Array of `height` strings, each exactly `width` chars. Each char references a `world_terrains.symbol`. |
+| `spawn_x`      | `integer`    | no        | Pixel-style grid coords (default `null`). Used by clients that draw the room as a mini-map.            |
+| `spawn_y`      | `integer`    | no        | Same.                                                                                                  |
+| `scripts_json` | `jsonb/text` | no        | Per-room Lua entry points. See [[Database]] for shape.                                                 |
+| `extra_json`   | `jsonb/text` | no        | Free-form extension bag.                                                                               |
 
 The composite PK `(region_id, room_id)` means **two rooms in the same region cannot share an id, but the same id may be reused across regions**. `floor1::5` and `floor2::5` are different rooms.
 
